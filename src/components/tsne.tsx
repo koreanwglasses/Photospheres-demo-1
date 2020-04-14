@@ -3,6 +3,7 @@ import * as PropTypes from "prop-types";
 import * as d3 from "d3";
 import { ClusterData } from "../types/cluster";
 import { validate, memoize } from "../utils";
+import { Preview } from "./preview";
 
 type Rectangle = [number, number, number, number];
 type View = [number, number, number];
@@ -168,6 +169,13 @@ interface ChartProps {
   clusterScale?: number;
 }
 
+interface ChartState {
+  showPreview: boolean;
+  imageSrc: string;
+  mouseX: number;
+  mouseY: number;
+}
+
 type SVGSelection = d3.Selection<SVGSVGElement, ClusterData, null, undefined>;
 type ClustersSelection = d3.Selection<
   d3.BaseType,
@@ -182,7 +190,7 @@ type LeavesSelection = d3.Selection<
   ClusterData
 >;
 
-export class Chart extends React.Component<ChartProps> {
+export class Chart extends React.Component<ChartProps, ChartState> {
   static propTypes = {
     data: PropTypes.objectOf(props => validate(ClusterData, props)).isRequired,
     width: PropTypes.number.isRequired,
@@ -196,10 +204,16 @@ export class Chart extends React.Component<ChartProps> {
     clusterScale: 1.5
   };
 
+  state = {
+    showPreview: false,
+    imageSrc: "",
+    mouseX: 0,
+    mouseY: 0
+  };
+
   private svgRef = React.createRef<SVGSVGElement>();
 
   private currentFocus: Node = null;
-  private view: View = [0, 0, 0];
 
   // Memoized versions of functions above. Dependent on the specific data
   private clusterBounds: typeof clusterBounds;
@@ -253,7 +267,13 @@ export class Chart extends React.Component<ChartProps> {
       .style("font", "10px sans-serif")
       .attr("text-anchor", "middle")
       .style("cursor", "pointer")
-      .on("click", () => this.focus(this.currentFocus.parent || this.root));
+      .on("click", () => this.focus(this.currentFocus.parent || this.root))
+      .on("mousemove", () => {
+        const [x, y] = d3.mouse(this.svg.node());
+        const mouseX = x + this.props.width / 2;
+        const mouseY = y + this.props.height / 2;
+        this.setState(prevState => prevState.showPreview && { mouseX, mouseY });
+      });
   }
 
   private initClusters(): void {
@@ -277,7 +297,16 @@ export class Chart extends React.Component<ChartProps> {
       .data(this.root.leaves())
       .join("circle")
       .on("click", this.handleNodeClick)
-      .attr("r", 15);
+      .attr("r", 15)
+      .on("mouseover", node => {
+        this.setState({ showPreview: true, imageSrc: node.data.preview });
+      })
+      .on("mouseout", node => {
+        this.setState(
+          prevState =>
+            prevState.imageSrc == node.data.preview && { showPreview: false }
+        );
+      });
   }
 
   /**
@@ -431,6 +460,23 @@ export class Chart extends React.Component<ChartProps> {
   }
 
   render() {
-    return <svg ref={this.svgRef}></svg>;
+    return (
+      <>
+        <svg ref={this.svgRef}></svg>
+        {this.state.showPreview && this.svgRef.current && (
+          <Preview
+            bounds={{
+              left: 0,
+              top: 0,
+              width: this.props.width,
+              height: this.props.height
+            }}
+            x={this.state.mouseX}
+            y={this.state.mouseY}
+            imageSrc={this.state.imageSrc}
+          />
+        )}
+      </>
+    );
   }
 }

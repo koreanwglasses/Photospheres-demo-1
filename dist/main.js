@@ -6100,6 +6100,53 @@ if (false) {} else {
 
 /***/ }),
 
+/***/ "./src/components/preview.tsx":
+/*!************************************!*\
+  !*** ./src/components/preview.tsx ***!
+  \************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const React = __webpack_require__(/*! react */ "react");
+class Preview extends React.Component {
+    constructor() {
+        super(...arguments);
+        this.containerRef = React.createRef();
+    }
+    render() {
+        const { x, y, bounds, imageSrc } = this.props;
+        const width = this.containerRef.current && this.containerRef.current.offsetWidth;
+        const height = this.containerRef.current && this.containerRef.current.offsetHeight;
+        const classList = ["photospheres-preview"];
+        const flipUp = y + height - bounds.top > bounds.height;
+        const flipLeft = x + width - bounds.left > bounds.width;
+        if (flipUp && flipLeft) {
+            classList.push("flipped-up-left");
+        }
+        else if (flipUp) {
+            classList.push("flipped-up");
+        }
+        else if (flipLeft) {
+            classList.push("flipped-left");
+        }
+        return (React.createElement("div", { ref: this.containerRef, style: {
+                top: y - (flipUp && height),
+                left: x - (flipLeft && width)
+            }, className: classList.join(" ") },
+            "Preview: ",
+            React.createElement("span", { id: "preview-name" }),
+            React.createElement("br", null),
+            React.createElement("img", { src: imageSrc, width: "160", height: "120" })));
+    }
+}
+exports.Preview = Preview;
+
+
+/***/ }),
+
 /***/ "./src/components/tsne.tsx":
 /*!*********************************!*\
   !*** ./src/components/tsne.tsx ***!
@@ -6115,6 +6162,7 @@ const PropTypes = __webpack_require__(/*! prop-types */ "./node_modules/prop-typ
 const d3 = __webpack_require__(/*! d3 */ "d3");
 const cluster_1 = __webpack_require__(/*! ../types/cluster */ "./src/types/cluster.ts");
 const utils_1 = __webpack_require__(/*! ../utils */ "./src/utils.tsx");
+const preview_1 = __webpack_require__(/*! ./preview */ "./src/components/preview.tsx");
 /**
  * Returns the smallest dimensions {width, height} that fit the content
  * dimensions (width >= contentWidth and height >= contentHeight) while
@@ -6234,9 +6282,14 @@ const colorCycle = [
 class Chart extends React.Component {
     constructor(props) {
         super(props);
+        this.state = {
+            showPreview: false,
+            imageSrc: "",
+            mouseX: 0,
+            mouseY: 0
+        };
         this.svgRef = React.createRef();
         this.currentFocus = null;
-        this.view = [0, 0, 0];
         this.root = null;
         this.svg = null;
         this.clusters = null;
@@ -6269,7 +6322,13 @@ class Chart extends React.Component {
             .style("font", "10px sans-serif")
             .attr("text-anchor", "middle")
             .style("cursor", "pointer")
-            .on("click", () => this.focus(this.currentFocus.parent || this.root));
+            .on("click", () => this.focus(this.currentFocus.parent || this.root))
+            .on("mousemove", () => {
+            const [x, y] = d3.mouse(this.svg.node());
+            const mouseX = x + this.props.width / 2;
+            const mouseY = y + this.props.height / 2;
+            this.setState(prevState => prevState.showPreview && { mouseX, mouseY });
+        });
     }
     initClusters() {
         this.clusters = this.svg
@@ -6288,7 +6347,13 @@ class Chart extends React.Component {
             .data(this.root.leaves())
             .join("circle")
             .on("click", this.handleNodeClick)
-            .attr("r", 15);
+            .attr("r", 15)
+            .on("mouseover", node => {
+            this.setState({ showPreview: true, imageSrc: node.data.preview });
+        })
+            .on("mouseout", node => {
+            this.setState(prevState => prevState.imageSrc == node.data.preview && { showPreview: false });
+        });
     }
     /**
      * @param {Node} d
@@ -6415,7 +6480,14 @@ class Chart extends React.Component {
         this.focus(this.root);
     }
     render() {
-        return React.createElement("svg", { ref: this.svgRef });
+        return (React.createElement(React.Fragment, null,
+            React.createElement("svg", { ref: this.svgRef }),
+            this.state.showPreview && this.svgRef.current && (React.createElement(preview_1.Preview, { bounds: {
+                    left: 0,
+                    top: 0,
+                    width: this.props.width,
+                    height: this.props.height
+                }, x: this.state.mouseX, y: this.state.mouseY, imageSrc: this.state.imageSrc }))));
     }
 }
 exports.Chart = Chart;
