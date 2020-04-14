@@ -10,14 +10,13 @@ import matplotlib.pyplot as plt
 
 # Used to store the clusters and output them JSON
 class ClusterNode:
-  def __init__(self, name=None, preview=None, size=None, x=None, y=None, bounds=None):
+  def __init__(self, name=None, preview=None, size=None, x=None, y=None):
     self.name = name
     self.preview = preview
     self.children = []
     self.size = size
     self.x = x
     self.y = y
-    self.bounds = bounds 
 
   def json(self, level=0):
     indent = ' '*(2*level)
@@ -33,13 +32,10 @@ class ClusterNode:
       result += indent + '  "size" : ' + str(self.size) + ',\n'
 
     if self.x is not None:
-      result += indent + ' "x" : ' + str(self.x) + ',\n'
+      result += indent + ' "x" : ' + str(list(self.x)) + ',\n'
 
     if self.y is not None:
-      result += indent + ' "y" : ' + str(self.y) + ',\n'
-
-    if self.bounds is not None:
-      result += indent + ' "bounds" : ' + str(self.bounds) + ',\n'  
+      result += indent + ' "y" : ' + str(list(self.y)) + ',\n'
 
     if self.children != []:
       result += indent + '  "children" : [\n'
@@ -67,15 +63,21 @@ def hierarchical_k_means(X, images, names, locations, k=7, split_threshold=10, m
   '''
   cluster = ClusterNode()
   cluster.size = X.shape[0]
-  cluster.bounds = [np.min(locations[:, 0]), np.min(locations[:, 1]), np.ptp(locations[:, 0]), np.ptp(locations[:, 1])]
 
   # output the centroids to a separate file
   global cluster_id
-  centroid_outname = './output/centroids/kmeans-centroid-' + str(cluster_id) + '.JPEG'
+  centroid_outname = './example-data/centroids/kmeans-centroid-' + str(cluster_id) + '.JPEG'
   cluster_id += 1
   cluster.name = f'cluster {cluster_id}'
   cluster.preview = centroid_outname
   cv2.imwrite(centroid_outname, np.mean(images, axis=0))
+
+  # Compute locations
+  if cluster.size > 1:
+    X_embedded = TSNE(n_components=2).fit_transform(X)
+  else:
+    X_embedded = np.zeros((1, 2))
+  locations = np.concatenate([locations, X_embedded[:, :, None]], axis=2)
 
   # Base Case
   if X.shape[0] < split_threshold or max_depth <= 0:
@@ -109,22 +111,9 @@ X = np.stack(images).reshape(len(images), -1)
 print("Performing PCA...")
 X_reduced = PCA(n_components=20).fit_transform(X)
 
-print("Trying TSNE...")
-X_embedded = TSNE(n_components=2).fit_transform(X_reduced)
-
-# plt.scatter(X_embedded[:, 0], X_embedded[:, 1])
-# plt.show()
-
-# print("Comparing K-means...")
-# k-means on unreduced input points
-# kmeans = KMeans(n_clusters=7).fit(X)
-
-# plt.scatter(X_embedded[:, 0], X_embedded[:, 1], c=kmeans.labels_, cmap="Accent")
-# plt.show()
-
 print("Computing K-means...")
 
-hkmeans = hierarchical_k_means(X_reduced, np.stack(images), np.array(filenames), X_embedded)
+hkmeans = hierarchical_k_means(X_reduced, np.stack(images), np.array(filenames), np.zeros((len(images), 2, 0)))
 
 f = open('./example-data/cluster-data.json', 'w')
 f.write(hkmeans.json())
