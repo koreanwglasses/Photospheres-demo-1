@@ -1,11 +1,11 @@
 import * as d3 from "d3";
-import { ClusterNode } from "./types/cluster";
+import { ClusterData } from "./types/cluster";
 import { HierarchyCircularNode } from "d3";
 import { keyByPrefix } from "./utils";
 import { PhotospheresProps } from "./components/photospheres";
 
 type Color = d3.Color | string;
-type Node = HierarchyCircularNode<ClusterNode>;
+type Node = HierarchyCircularNode<ClusterData>;
 
 const colorEq = (a: Color, b: Color): boolean =>
   d3.color(a.toString()).toString() == d3.color(b.toString()).toString();

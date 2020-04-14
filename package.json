@@ -24,12 +24,12 @@
     "webpack-cli": "^3.3.11"
   },
   "dependencies": {
+    "acorn": "^7.1.1",
     "d3": "^5.15.0",
     "fp-ts": "^2.4.4",
     "io-ts": "^2.1.0",
-    "prop-types": "^15.7.2",
-    "acorn": "^7.1.1",
     "minimist": "^1.2.2",
+    "prop-types": "^15.7.2",
     "react": "^16.12.0",
     "react-dom": "^16.12.0"
   },

@@ -1,17 +1,23 @@
 import * as t from "io-ts";
 
-export interface ClusterNode {
-  size?: number;
-  preview?: string;
+export interface ClusterData {
   name?: string;
-  children?: Array<ClusterNode>;
+  preview?: string;
+  size?: number;
+  bounds?: [number, number, number, number];
+  x?: number;
+  y?: number;
+  children?: Array<ClusterData>;
 }
 
-export const ClusterNode: t.Type<ClusterNode> = t.recursion("ClusterNode", () =>
+export const ClusterData: t.Type<ClusterData> = t.recursion("ClusterData", () =>
   t.partial({
-    size: t.number,
-    preview: t.string,
     name: t.string,
-    children: t.array(ClusterNode)
+    preview: t.string,
+    size: t.number,
+    bounds: t.tuple([t.number, t.number, t.number, t.number]),
+    x: t.number,
+    y: t.number,
+    children: t.array(ClusterData)
   })
 );

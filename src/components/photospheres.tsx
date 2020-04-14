@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as PropTypes from "prop-types";
 import * as d3 from "d3";
-import { ClusterNode } from "../types/cluster";
+import { ClusterData } from "../types/cluster";
 import { validate } from "../utils";
 import { HierarchyCircularNode } from "d3";
 import {
@@ -18,16 +18,16 @@ const clamp = (x: number, min: number, max: number): number =>
 type Color = d3.Color | string;
 const luminance = (color: Color): number => d3.lab(color.toString()).l;
 
-type Node = HierarchyCircularNode<ClusterNode>;
+type Node = HierarchyCircularNode<ClusterData>;
 type NodeSelection = d3.Selection<
   SVGCircleElement,
   Node,
   SVGSVGElement,
-  ClusterNode
+  ClusterData
 >;
 
 export interface PhotospheresProps {
-  data: ClusterNode;
+  data: ClusterData;
   width: number;
   height: number;
   minRadius?: number;
@@ -38,7 +38,7 @@ export interface PhotospheresProps {
 
 export class Photospheres extends React.Component<PhotospheresProps> {
   static propTypes = {
-    data: PropTypes.objectOf(props => validate(ClusterNode, props)).isRequired,
+    data: PropTypes.objectOf(props => validate(ClusterData, props)).isRequired,
     width: PropTypes.number.isRequired,
     height: PropTypes.number.isRequired,
     minRadius: PropTypes.number,
@@ -54,9 +54,9 @@ export class Photospheres extends React.Component<PhotospheresProps> {
 
   private svgRef = React.createRef<SVGSVGElement>();
 
-  private svg: d3.Selection<SVGSVGElement, ClusterNode, null, undefined>;
+  private svg: d3.Selection<SVGSVGElement, ClusterData, null, undefined>;
   private node: NodeSelection;
-  private label: d3.Selection<SVGTextElement, Node, SVGSVGElement, ClusterNode>;
+  private label: d3.Selection<SVGTextElement, Node, SVGSVGElement, ClusterData>;
 
   private focus: Node;
   private view: [number, number, number];
@@ -68,7 +68,7 @@ export class Photospheres extends React.Component<PhotospheresProps> {
   private previewImg = React.createRef<HTMLImageElement>();
 
   // create the circle packing layout
-  private pack(data: ClusterNode): Node {
+  private pack(data: ClusterData): Node {
     const { width, height } = this.props;
     return d3
       .pack()
@@ -181,7 +181,7 @@ export class Photospheres extends React.Component<PhotospheresProps> {
     this.preview.current.setAttribute("hidden", "");
   }
 
-  private chart(data: ClusterNode): void {
+  private chart(data: ClusterData): void {
     const { width, height, strokeOnly, colorMapping } = this.props;
     const root = this.pack(data);
 
@@ -258,7 +258,7 @@ export class Photospheres extends React.Component<PhotospheresProps> {
       SVGTextElement,
       Node,
       SVGSVGElement,
-      ClusterNode
+      ClusterData
     >;
 
     this.prevVisibleNodes = this.node;

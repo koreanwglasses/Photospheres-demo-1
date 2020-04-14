@@ -6100,10 +6100,10 @@ if (false) {} else {
 
 /***/ }),
 
-/***/ "./src/components/photospheres.tsx":
-/*!*****************************************!*\
-  !*** ./src/components/photospheres.tsx ***!
-  \*****************************************/
+/***/ "./src/components/tsne.tsx":
+/*!*********************************!*\
+  !*** ./src/components/tsne.tsx ***!
+  \*********************************/
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -6115,216 +6115,292 @@ const PropTypes = __webpack_require__(/*! prop-types */ "./node_modules/prop-typ
 const d3 = __webpack_require__(/*! d3 */ "d3");
 const cluster_1 = __webpack_require__(/*! ../types/cluster */ "./src/types/cluster.ts");
 const utils_1 = __webpack_require__(/*! ../utils */ "./src/utils.tsx");
-const photospheres_color_schemes_1 = __webpack_require__(/*! ../photospheres-color-schemes */ "./src/photospheres-color-schemes.ts");
-const PADDING = 3;
-const clamp = (x, min, max) => Math.min(Math.max(x, min), max);
-const luminance = (color) => d3.lab(color.toString()).l;
-class Photospheres extends React.Component {
-    constructor() {
-        super(...arguments);
+/**
+ * Returns the smallest dimensions {width, height} that fit the content
+ * dimensions (width >= contentWidth and height >= contentHeight) while
+ * maintaining the aspect ratio of the frame (width/height ==
+ * frameWidth/frameHeight)
+ * @param {[number, number, number, number]} contentBounds
+ * @param {[number, number]} frameSize
+ */
+function fitRect([contentLeft, contentTop, contentWidth, contentHeight], [frameWidth, frameHeight]) {
+    const scale = Math.max(contentWidth / frameWidth, contentHeight / frameHeight);
+    const width = frameWidth * scale;
+    const height = frameHeight * scale;
+    const x = contentLeft - (width - contentWidth) / 2;
+    const y = contentTop - (height - contentHeight) / 2;
+    return [x, y, width, height];
+}
+/**
+ * @param {Rectangle} rect
+ * @param {number} frameWidth
+ */
+function rectToView([left, top, width, height], frameWidth) {
+    return [left + width / 2, top + height / 2, frameWidth / width];
+}
+/**
+ * Scales a rectangle out from its center
+ * @param {Rectangle} rectangle
+ * @param {number} scale
+ */
+function scaleRectangle([x, y, width, height], scale) {
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+    const newWidth = width * scale;
+    const newHeight = height * scale;
+    return [centerX - newWidth / 2, centerY - newHeight / 2, newWidth, newHeight];
+}
+/**
+ * @param {d3.HierarchyNode<any>} node
+ * @returns {number}
+ */
+function whichChild(node) {
+    if (!node.parent)
+        return 0;
+    return node.parent.children.indexOf(node);
+}
+/**
+ * @param {d3.HierarchyNode<any>} branch
+ * @param {d3.HierarchyNode<any>} target
+ * @returns {number}
+ */
+function whichBranch(branch, target) {
+    const lineage = target.ancestors();
+    const branchIndex = lineage.indexOf(branch);
+    if (branchIndex <= 0)
+        return -1;
+    return whichChild(lineage[branchIndex - 1]);
+}
+/**
+ * @param {[number, number][]} points
+ */
+function centroid(points) {
+    const [sumX, sumY] = points.reduce(([x, y], [accX, accY]) => [x + accX, y + accY], [0, 0]);
+    return [sumX / points.length, sumY / points.length];
+}
+/**
+ * @param {[number, number][]} points
+ */
+function stdDist(points) {
+    const [cX, cY] = centroid(points);
+    const dists2 = points.map(([x, y]) => Math.pow(cX - x, 2) + Math.pow(cY - y, 2));
+    const meanDist2 = dists2.reduce((a, b) => a + b, 0) / dists2.length;
+    const dists = dists2.map(Math.sqrt);
+    const meanDist = dists.reduce((a, b) => a + b, 0) / dists.length;
+    return Math.sqrt(meanDist2 - Math.pow(meanDist, 2));
+}
+/**
+ * Colors this node with a non-negative integer such that colorIndex(node) !=
+ * colorIndex(node.parent) and colorIndex(node) != colorIndex(sibling)
+ * @param {d3.HierarchyNode<any>} node
+ */
+function colorIndex(node) {
+    let i = whichChild(node);
+    i += node.parent && colorIndex(node.parent) <= i ? 1 : 0;
+    return i;
+}
+/**
+ * @param {Node} node
+ */
+function clusterCenter(node) {
+    const points = node
+        .leaves()
+        .map(leaf => [leaf.data.x, leaf.data.y]);
+    return centroid(points);
+}
+/**
+ * @param {Node} node
+ */
+function clusterRadius(node) {
+    const points = node
+        .leaves()
+        .map(leaf => [leaf.data.x, leaf.data.y]);
+    return stdDist(points);
+}
+const colorCycle = [
+    "#66c2a5",
+    "#fc8d62",
+    "#8da0cb",
+    "#e78ac3",
+    "#a6d854",
+    "#ffd92f",
+    "#e5c494"
+];
+class Chart extends React.Component {
+    constructor(props) {
+        super(props);
         this.svgRef = React.createRef();
-        this.preview = React.createRef();
-        this.previewName = React.createRef();
-        this.previewImg = React.createRef();
+        this.currentFocus = null;
+        this.view = [0, 0, 0];
+        this.root = null;
+        this.svg = null;
+        this.clusters = null;
+        this.leaves = null;
+        this.handleNodeClick = this.handleNodeClick.bind(this);
+        this.leafColor = this.leafColor.bind(this);
     }
-    // create the circle packing layout
-    pack(data) {
-        const { width, height } = this.props;
-        return d3
-            .pack()
-            .size([width, height])
-            .padding(PADDING)(d3
-            .hierarchy(data)
-            .sum(d => d.size)
-            .sort((a, b) => b.data.size - a.data.size));
+    initClusterFunctions() {
+        this.clusterCenter = utils_1.memoize(clusterCenter, node => node.value);
+        this.clusterRadius = utils_1.memoize(clusterRadius, node => node.value);
+        this.colorIndex = utils_1.memoize(colorIndex, node => node.value);
     }
-    zoomTo(v) {
-        const { width, height, minRadius, strokeOnly } = this.props;
-        const k = width / v[2];
-        this.view = v;
-        this.label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-        const isVisible = (d) => (d.x - v[0] + d.r) * k > -width / 2 &&
-            (d.x - v[0] - d.r) * k < width / 2 &&
-            (d.y - v[1] + d.r) * k > -height / 2 &&
-            (d.y - v[1] - d.r) * k < height / 2 &&
-            d.r * k >= minRadius / 2;
-        const visibleNodes = this.node.filter(isVisible);
-        visibleNodes.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-        visibleNodes.attr("r", d => d.r * k);
-        this.prevVisibleNodes.attr("visibility", d => "hidden");
-        visibleNodes.attr("visibility", d => "visible");
-        this.prevVisibleNodes = visibleNodes;
-        if (strokeOnly) {
-            visibleNodes.attr("stroke-width", d => Math.max((d.r * k) / 50, 1) *
-                clamp((2 * d.r * k) / minRadius - 1, 0, 1));
-        }
-        else {
-            visibleNodes.attr("fill-opacity", d => clamp((2 * d.r * k) / minRadius - 1, 0, 1));
-        }
+    initRoot() {
+        this.root = d3
+            .hierarchy(this.props.data)
+            .sum(node => node.size)
+            .sort((a, b) => b.data.size - a.data.size);
     }
-    zoom(d, durationMs = 750) {
-        const { width, height } = this.props;
-        this.focus = d;
-        const k = this.focus.r * 2 * Math.max(1, width / height);
-        const transition = this.svg
-            .transition()
-            .duration(durationMs)
-            .tween("zoom", d => {
-            const i = d3.interpolateZoom(this.view, [
-                this.focus.x,
-                this.focus.y,
-                k
-            ]);
-            return (t) => this.zoomTo(i(t));
-        });
-        const focus = this.focus;
-        this.label
-            .filter(function (d) {
-            return d.parent === focus || this.style.display === "inline";
-        })
-            .transition(transition)
-            .style("fill-opacity", (d) => (d.parent === focus ? 1 : 0))
-            .on("start", function (d) {
-            if (d.parent === focus)
-                this.style.display = "inline";
-        })
-            .on("end", function (d) {
-            if (d.parent !== focus)
-                this.style.display = "none";
-        });
-    }
-    textColor(d) {
-        return luminance(this.props.colorMapping(d, this.props)) > 70
-            ? "black"
-            : "white";
-    }
-    showPreview(d) {
-        if (d.data.preview) {
-            this.previewImg.current.setAttribute("src", d.data.preview);
-            this.previewName.current.textContent = d.data.name;
-            this.preview.current.removeAttribute("hidden");
-            this.preview.current.style.backgroundColor = this.props
-                .colorMapping(d, this.props)
-                .toString();
-            this.preview.current.style.color = this.textColor(d);
-        }
-    }
-    hidePreview() {
-        this.preview.current.setAttribute("hidden", "");
-    }
-    chart(data) {
-        const { width, height, strokeOnly, colorMapping } = this.props;
-        const root = this.pack(data);
-        this.focus = root;
+    initSVG() {
         this.svg = d3
             .select(this.svgRef.current)
-            .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
-            .attr("preserveAspectRatio", "xMidYMid meet")
-            .style("display", "block")
-            .style("background", strokeOnly ? "white" : colorMapping(root, this.props).toString())
+            .attr("viewBox", 
+        // @ts-ignore
+        [
+            -this.props.width / 2,
+            -this.props.height / 2,
+            this.props.width,
+            this.props.height
+        ])
+            .style("font", "10px sans-serif")
+            .attr("text-anchor", "middle")
             .style("cursor", "pointer")
-            .on("click", () => this.zoom(root));
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-        const self = this;
-        this.node = this.svg
+            .on("click", () => this.focus(this.root));
+    }
+    initClusters() {
+        this.clusters = this.svg
             .append("g")
             .selectAll("circle")
-            .data(root.descendants().slice(1))
+            .data(this.root.descendants().filter(node => node.children))
             .join("circle")
-            .attr("fill", (d) => strokeOnly ? "white" : colorMapping(d, this.props).toString())
-            .attr("stroke", (d) => strokeOnly ? colorMapping(d, this.props).toString() : null)
-            .on("mouseover", function (d) {
-            if (strokeOnly) {
-                // darken outline on hover
-                d3.select(this).attr("stroke", (d) => d3
-                    .color(colorMapping(d, self.props).toString())
-                    .darker()
-                    .toString());
-            }
-            else {
-                d3.select(this).attr("stroke", "#000");
-            }
-            self.showPreview(d);
-        })
-            .on("mouseout", function () {
-            if (strokeOnly) {
-                d3.select(this).attr("stroke", (d) => colorMapping(d, self.props).toString());
-            }
-            else {
-                d3.select(this).attr("stroke", null);
-            }
-            self.hidePreview();
-        })
-            .on("click", (d) => this.focus !== d &&
-            (d.children && this.zoom(d), d3.event.stopPropagation()));
-        this.label = this.svg
-            .append("g")
-            .style("font", "10px sans-serif")
-            .attr("pointer-events", "none")
-            .attr("text-anchor", "middle")
-            .selectAll("text")
-            .data(root.descendants())
-            .join("text")
-            .style("fill", d => (strokeOnly ? "black" : this.textColor(d)))
-            .style("fill-opacity", d => (d.parent === root ? 1 : 0))
-            .style("display", d => (d.parent === root ? "inline" : "none"))
-            .text(d => d.data.name);
-        this.prevVisibleNodes = this.node;
-        this.zoomTo([
-            root.x,
-            root.y,
-            this.focus.r * 2 * Math.max(1, width / height)
-        ]);
+            .attr("fill-opacity", 0)
+            .attr("fill", node => colorCycle[this.colorIndex(node) % colorCycle.length])
+            .on("click", this.handleNodeClick);
     }
-    handleMouseMove(e) {
-        const { clientX, clientY } = e;
-        const previewRect = this.preview.current.getBoundingClientRect();
-        const svgRect = this.svgRef.current.getBoundingClientRect();
-        const flipUp = clientY + previewRect.height > svgRect.bottom;
-        const flipLeft = clientX + previewRect.width > svgRect.right;
-        this.preview.current.classList.remove("photospheres-flipped-up", "photospheres-flipped-left", "photospheres-flipped-up-left");
-        if (flipUp && flipLeft) {
-            this.preview.current.classList.add("photospheres-flipped-up-left");
+    initLeaves() {
+        this.leaves = this.svg
+            .append("g")
+            .selectAll("circle")
+            .data(this.root.leaves())
+            .join("circle")
+            .on("click", this.handleNodeClick);
+    }
+    /**
+     * @param {Node} d
+     */
+    handleNodeClick(d) {
+        const branchIndex = whichBranch(this.currentFocus, d);
+        if (branchIndex == -1 && this.currentFocus.parent) {
+            this.focus(this.currentFocus.parent);
+            return;
         }
-        else if (flipUp) {
-            this.preview.current.classList.add("photospheres-flipped-up");
+        this.focus(this.currentFocus.children[branchIndex]);
+        d3.event.stopPropagation();
+    }
+    /**
+     * @param {Node} node
+     */
+    clusterColor(node) {
+        return colorCycle[this.colorIndex(node) % colorCycle.length];
+    }
+    leafColor(node) {
+        const bi = whichBranch(this.currentFocus, node);
+        return bi != -1
+            ? this.clusterColor(this.currentFocus.children[bi])
+            : "#808080";
+    }
+    /**
+     * @param {[number, number, number]} view [x, y, scale]
+     */
+    setZoom(view) {
+        this.view = view;
+        const [x, y, scale] = view;
+        this.leaves
+            .attr("transform", node => `translate(${(node.data.x - x) * scale},${(node.data.y - y) * scale})`)
+            .attr("r", 5);
+        this.clusters
+            .attr("transform", node => {
+            const [cx, cy] = this.clusterCenter(node);
+            return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
+        })
+            .attr("r", node => this.props.clusterScale * this.clusterRadius(node) * scale);
+    }
+    /**
+     * @param {Node} node
+     */
+    focus(node, animate = true) {
+        this.currentFocus = node;
+        const [x, y, scale] = rectToView(fitRect(scaleRectangle(node.data.bounds, 1.1), [
+            this.props.width,
+            this.props.height
+        ]), this.props.width);
+        const transition = this.svg.transition().duration(750);
+        if (animate) {
+            transition.tween("zoom", () => {
+                const f = ([x, y, scale]) => [x, y, 2000 / scale];
+                const i = d3.interpolateZoom(f(this.view), f([x, y, scale]));
+                return (t) => this.setZoom(f(i(t)));
+            });
         }
-        else if (flipLeft) {
-            this.preview.current.classList.add("photospheres-flipped-left");
+        else {
+            this.setZoom([x, y, scale]);
         }
-        this.preview.current.style.top =
-            clientY - (flipUp && previewRect.height) + "px";
-        this.preview.current.style.left =
-            clientX - (flipLeft && previewRect.width) + "px";
+        this.leaves
+            .transition(transition)
+            .style("fill", this.leafColor)
+            .style("fill-opacity", node => whichBranch(this.currentFocus, node) == -1 ? 0.2 : 1);
+        /**
+         * Helper function for showing/hiding relevant clusters
+         */
+        const onStart = (node, el) => {
+            if (el.style.visibility != "visible" &&
+                this.currentFocus.children.indexOf(node) != -1) {
+                el.style.visibility = "visible";
+            }
+        };
+        /**
+         * @param {Node} node
+         * @param {Element} el
+         */
+        const onEnd = (node, el) => {
+            el.style.visibility =
+                this.currentFocus.children.indexOf(node) == -1 ? "hidden" : "visible";
+        };
+        this.clusters
+            .transition(transition)
+            .style("fill-opacity", node => this.props.clusterOpacity *
+            (this.currentFocus.children.indexOf(node) != -1 ? 1 : 0))
+            .on("start", function (node) {
+            // @ts-ignore
+            onStart(node, this);
+        })
+            .on("end", function (node) {
+            // @ts-ignore
+            onEnd(node, this);
+        });
     }
     componentDidMount() {
-        const { data } = this.props;
-        this.chart(data);
+        this.initClusterFunctions();
+        this.initRoot();
+        this.initSVG();
+        this.initClusters();
+        this.initLeaves();
+        this.focus(this.root, false);
     }
     render() {
-        return (React.createElement(React.Fragment, null,
-            React.createElement("svg", { ref: this.svgRef, onMouseMove: (e) => this.handleMouseMove(e), onMouseLeave: () => this.hidePreview() }),
-            React.createElement("div", { ref: this.preview, className: "photospheres-preview" },
-                "Preview:",
-                " ",
-                React.createElement("span", { ref: this.previewName, className: "photospheres-preview-name" }),
-                " ",
-                React.createElement("br", null),
-                React.createElement("img", { ref: this.previewImg, className: "photospheres-preview-img", width: 160, height: 120 }))));
+        return React.createElement("svg", { ref: this.svgRef });
     }
 }
-exports.Photospheres = Photospheres;
-Photospheres.propTypes = {
-    data: PropTypes.objectOf(props => utils_1.validate(cluster_1.ClusterNode, props)).isRequired,
+exports.Chart = Chart;
+Chart.propTypes = {
+    data: PropTypes.objectOf(props => utils_1.validate(cluster_1.ClusterData, props)).isRequired,
     width: PropTypes.number.isRequired,
     height: PropTypes.number.isRequired,
-    minRadius: PropTypes.number,
-    strokeOnly: PropTypes.bool
+    clusterOpacity: PropTypes.number,
+    clusterScale: PropTypes.number
 };
-Photospheres.defaultProps = {
-    minRadius: 10,
-    strokeOnly: false,
-    colorMapping: photospheres_color_schemes_1.createColorMapping(photospheres_color_schemes_1.palettes.ylgnbu, photospheres_color_schemes_1.colorMappings.sequential)
+Chart.defaultProps = {
+    clusterOpacity: 0.5,
+    clusterScale: 1.5
 };
 
 
@@ -6351,107 +6427,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const React = __webpack_require__(/*! react */ "react");
 const ReactDOM = __webpack_require__(/*! react-dom */ "react-dom");
-const photospheres_1 = __webpack_require__(/*! ./components/photospheres */ "./src/components/photospheres.tsx");
-const photospheres_color_schemes_1 = __webpack_require__(/*! ./photospheres-color-schemes */ "./src/photospheres-color-schemes.ts");
+const tsne_1 = __webpack_require__(/*! ./components/tsne */ "./src/components/tsne.tsx");
 const root = document.getElementById("react-root");
 (() => __awaiter(void 0, void 0, void 0, function* () {
     const response = yield fetch("example-data/cluster-data.json");
     const data = yield response.json();
-    ReactDOM.render(React.createElement(photospheres_1.Photospheres, { data: data, height: 720, width: 1280, colorMapping: photospheres_color_schemes_1.createColorMapping(photospheres_color_schemes_1.palettes.ylgnbu, "seq") }), root);
+    ReactDOM.render(
+    // <Photospheres
+    //   data={data}
+    //   height={720}
+    //   width={1280}
+    //   colorMapping={createColorMapping(palettes.ylgnbu, "seq")}
+    // />,
+    React.createElement(tsne_1.Chart, { data: data, height: window.innerHeight, width: window.innerWidth }), root);
 }))();
-
-
-/***/ }),
-
-/***/ "./src/photospheres-color-schemes.ts":
-/*!*******************************************!*\
-  !*** ./src/photospheres-color-schemes.ts ***!
-  \*******************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", { value: true });
-const d3 = __webpack_require__(/*! d3 */ "d3");
-const utils_1 = __webpack_require__(/*! ./utils */ "./src/utils.tsx");
-const colorEq = (a, b) => d3.color(a.toString()).toString() == d3.color(b.toString()).toString();
-exports.colorMappings = {
-    sequential: (palette) => (d, { strokeOnly }) => (d.children ? palette(d.depth) : strokeOnly ? "black" : "white"),
-    qualitative: (palette) => {
-        const whichChildMemo = {};
-        const whichChild = (d) => whichChildMemo[d.data.name]
-            ? whichChildMemo[d.data.name]
-            : (whichChildMemo[d.data.name] = d.parent.children.indexOf(d));
-        const nodeColorMemo = {};
-        const nodeColor = (d) => {
-            if (!d.parent)
-                return "white";
-            if (!(d.data.name in nodeColorMemo)) {
-                let i = whichChild(d);
-                for (let j = 0; j < 3; j++) {
-                    if (whichChild(d) > 0 &&
-                        colorEq(palette(i), nodeColor(d.parent.children[whichChild(d) - 1])))
-                        i++; // dont repeat colors twice in a row
-                    if (colorEq(palette(i), nodeColor(d.parent)))
-                        i++; // make sure color is not same as parent
-                }
-                nodeColorMemo[d.data.name] = palette(i);
-            }
-            return nodeColorMemo[d.data.name];
-        };
-        return nodeColor;
-    },
-    adaptive: (palette) => (d) => {
-        const depthRatio = d.depth / (d.depth + d.height);
-        return palette(depthRatio);
-    },
-    constant: (palette) => (d) => palette(0)
-};
-function createColorMapping(palette, type) {
-    const paletteF = Array.isArray(palette)
-        ? (i) => palette[i % palette.length]
-        : palette;
-    if (typeof type === "string") {
-        const colorMapping = utils_1.keyByPrefix(exports.colorMappings, type);
-        return colorMapping(paletteF);
-    }
-    else {
-        return type(paletteF);
-    }
-}
-exports.createColorMapping = createColorMapping;
-exports.palettes = {
-    // Bostock //
-    // 0: Blue-Green color scale
-    bugn: d3
-        .scaleLinear()
-        .domain([0, 5])
-        // @ts-ignore
-        .range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
-        .interpolate(d3.interpolateHcl),
-    // Choi //
-    // 1: YlGnBu
-    ylgnbu: [
-        "#ffffd9",
-        "#edf8b1",
-        "#c7e9b4",
-        "#7fcdbb",
-        "#41b6c4",
-        "#1d91c0",
-        "#225ea8",
-        "#253494",
-        "#081d58",
-        "#b3b3b3"
-    ],
-    // 2: Greyscale
-    greyscale: d3
-        .scaleLinear()
-        .domain([0, 9])
-        // @ts-ignore
-        .range(["white", "black"])
-        .interpolate(d3.interpolateHcl)
-};
 
 
 /***/ }),
@@ -6467,11 +6456,14 @@ exports.palettes = {
 
 Object.defineProperty(exports, "__esModule", { value: true });
 const t = __webpack_require__(/*! io-ts */ "./node_modules/io-ts/es6/index.js");
-exports.ClusterNode = t.recursion("ClusterNode", () => t.partial({
-    size: t.number,
-    preview: t.string,
+exports.ClusterData = t.recursion("ClusterData", () => t.partial({
     name: t.string,
-    children: t.array(exports.ClusterNode)
+    preview: t.string,
+    size: t.number,
+    bounds: t.tuple([t.number, t.number, t.number, t.number]),
+    x: t.number,
+    y: t.number,
+    children: t.array(exports.ClusterData)
 }));
 
 
@@ -6519,6 +6511,19 @@ function keyByPrefix(obj, prefix) {
     return obj[matches[0]];
 }
 exports.keyByPrefix = keyByPrefix;
+/**
+ * Cosntructs a memoized instance of f
+ */
+function memoize(f, hash) {
+    const memo = {};
+    return (...args) => {
+        const key = hash(...args);
+        if (!(key in memo))
+            memo[key] = f(...args);
+        return memo[key];
+    };
+}
+exports.memoize = memoize;
 
 
 /***/ }),

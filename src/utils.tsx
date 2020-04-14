@@ -43,3 +43,18 @@ export function keyByPrefix<T>(obj: { [key: string]: T }, prefix: string): T {
 
   return obj[matches[0]];
 }
+
+/**
+ * Cosntructs a memoized instance of f
+ */
+export function memoize<P extends Array<any>, R>(
+  f: (...args: P) => R,
+  hash: (...args: P) => string | number
+): (...args: P) => R {
+  const memo: { [key: string]: R } = {};
+  return (...args): R => {
+    const key = hash(...args);
+    if (!(key in memo)) memo[key] = f(...args);
+    return memo[key];
+  };
+}
