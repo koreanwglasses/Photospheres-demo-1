@@ -32,10 +32,10 @@ class ClusterNode:
       result += indent + '  "size" : ' + str(self.size) + ',\n'
 
     if self.x is not None:
-      result += indent + ' "x" : ' + str(list(self.x)) + ',\n'
+      result += indent + '  "x" : ' + str(list(self.x)) + ',\n'
 
     if self.y is not None:
-      result += indent + ' "y" : ' + str(list(self.y)) + ',\n'
+      result += indent + '  "y" : ' + str(list(self.y)) + ',\n'
 
     if self.children != []:
       result += indent + '  "children" : [\n'
@@ -63,6 +63,8 @@ def hierarchical_k_means(X, images, names, locations, k=7, split_threshold=10, m
   '''
   cluster = ClusterNode()
   cluster.size = X.shape[0]
+  cluster.x = np.mean(locations[:, 0, :], axis=0)
+  cluster.y = np.mean(locations[:, 1, :], axis=0)
 
   # output the centroids to a separate file
   global cluster_id
