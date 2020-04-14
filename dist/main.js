@@ -6296,11 +6296,11 @@ class Chart extends React.Component {
     handleNodeClick(d) {
         d3.event.stopPropagation();
         const branchIndex = whichBranch(this.currentFocus, d);
-        if (branchIndex == -1 && this.currentFocus.parent) {
-            this.focus(this.currentFocus.parent);
-            return;
-        }
-        if (this.currentFocus.children) {
+        // if (branchIndex == -1 && this.currentFocus.parent) {
+        //   this.focus(this.currentFocus.parent);
+        //   return;
+        // }
+        if (branchIndex != -1 && this.currentFocus.children) {
             this.focus(this.currentFocus.children[branchIndex]);
         }
     }
@@ -6346,10 +6346,31 @@ class Chart extends React.Component {
         //       this.clusterRadius(node, this.currentFocus.depth) *
         //       scale
         //   );
+        /**
+         * Helper function for showing/hiding relevant clusters
+         */
+        const onStart = (node, el) => {
+            if (el.style.visibility != "visible" &&
+                whichBranch(this.currentFocus, node) != -1) {
+                el.style.visibility = "visible";
+            }
+        };
+        const onEnd = (node, el) => {
+            el.style.visibility =
+                whichBranch(this.currentFocus, node) == -1 ? "hidden" : "visible";
+        };
         this.leaves
             .transition(transition)
             .style("fill", this.leafColor)
-            .style("fill-opacity", node => whichBranch(this.currentFocus, node) == -1 ? 0 : 1);
+            .style("fill-opacity", node => whichBranch(this.currentFocus, node) == -1 ? 0 : 1)
+            .on("start", function (node) {
+            // @ts-ignore
+            onStart(node, this);
+        })
+            .on("end", function (node) {
+            // @ts-ignore
+            onEnd(node, this);
+        });
         /**
          * Helper function for showing/hiding relevant clusters
          */
