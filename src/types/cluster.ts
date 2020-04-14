@@ -4,10 +4,9 @@ export interface ClusterData {
   name?: string;
   preview?: string;
   size?: number;
-  bounds?: [number, number, number, number];
-  x?: number;
-  y?: number;
-  children?: Array<ClusterData>;
+  x?: number[];
+  y?: number[];
+  children?: ClusterData[];
 }
 
 export const ClusterData: t.Type<ClusterData> = t.recursion("ClusterData", () =>
@@ -15,9 +14,8 @@ export const ClusterData: t.Type<ClusterData> = t.recursion("ClusterData", () =>
     name: t.string,
     preview: t.string,
     size: t.number,
-    bounds: t.tuple([t.number, t.number, t.number, t.number]),
-    x: t.number,
-    y: t.number,
+    x: t.array(t.number),
+    y: t.array(t.number),
     children: t.array(ClusterData)
   })
 );

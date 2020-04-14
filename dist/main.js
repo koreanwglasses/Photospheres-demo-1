@@ -6199,22 +6199,27 @@ function colorIndex(node) {
     i += node.parent && colorIndex(node.parent) <= i ? 1 : 0;
     return i;
 }
-/**
- * @param {Node} node
- */
-function clusterCenter(node) {
-    const points = node
-        .leaves()
-        .map(leaf => [leaf.data.x, leaf.data.y]);
-    return centroid(points);
+function clusterBounds(node, depth) {
+    const xs = node.leaves().map(leaf => leaf.data.x[depth]);
+    const ys = node.leaves().map(leaf => leaf.data.y[depth]);
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    const width = Math.max(...xs) - left;
+    const height = Math.max(...ys) - top;
+    return [left, top, width, height];
 }
-/**
- * @param {Node} node
- */
-function clusterRadius(node) {
+function nodeLocation(node, depth) {
+    if (node.depth == 0)
+        return [0, 0];
+    const i = Math.min(depth, node.depth);
+    const x = node.data.x[i];
+    const y = node.data.y[i];
+    return [x, y];
+}
+function clusterRadius(node, depth) {
     const points = node
         .leaves()
-        .map(leaf => [leaf.data.x, leaf.data.y]);
+        .map(leaf => [leaf.data.x[depth], leaf.data.y[depth]]);
     return stdDist(points);
 }
 const colorCycle = [
@@ -6240,8 +6245,8 @@ class Chart extends React.Component {
         this.leafColor = this.leafColor.bind(this);
     }
     initClusterFunctions() {
-        this.clusterCenter = utils_1.memoize(clusterCenter, node => node.value);
-        this.clusterRadius = utils_1.memoize(clusterRadius, node => node.value);
+        this.clusterBounds = utils_1.memoize(clusterBounds, (node, depth) => node.value + "," + depth);
+        this.clusterRadius = utils_1.memoize(clusterRadius, (node, depth) => node.value + "," + depth);
         this.colorIndex = utils_1.memoize(colorIndex, node => node.value);
     }
     initRoot() {
@@ -6264,7 +6269,7 @@ class Chart extends React.Component {
             .style("font", "10px sans-serif")
             .attr("text-anchor", "middle")
             .style("cursor", "pointer")
-            .on("click", () => this.focus(this.root));
+            .on("click", () => this.focus(this.currentFocus.parent || this.root));
     }
     initClusters() {
         this.clusters = this.svg
@@ -6282,19 +6287,22 @@ class Chart extends React.Component {
             .selectAll("circle")
             .data(this.root.leaves())
             .join("circle")
-            .on("click", this.handleNodeClick);
+            .on("click", this.handleNodeClick)
+            .attr("r", 15);
     }
     /**
      * @param {Node} d
      */
     handleNodeClick(d) {
+        d3.event.stopPropagation();
         const branchIndex = whichBranch(this.currentFocus, d);
         if (branchIndex == -1 && this.currentFocus.parent) {
             this.focus(this.currentFocus.parent);
             return;
         }
-        this.focus(this.currentFocus.children[branchIndex]);
-        d3.event.stopPropagation();
+        if (this.currentFocus.children) {
+            this.focus(this.currentFocus.children[branchIndex]);
+        }
     }
     /**
      * @param {Node} node
@@ -6309,82 +6317,81 @@ class Chart extends React.Component {
             : "#808080";
     }
     /**
-     * @param {[number, number, number]} view [x, y, scale]
-     */
-    setZoom(view) {
-        this.view = view;
-        const [x, y, scale] = view;
-        this.leaves
-            .attr("transform", node => `translate(${(node.data.x - x) * scale},${(node.data.y - y) * scale})`)
-            .attr("r", 5);
-        this.clusters
-            .attr("transform", node => {
-            const [cx, cy] = this.clusterCenter(node);
-            return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
-        })
-            .attr("r", node => this.props.clusterScale * this.clusterRadius(node) * scale);
-    }
-    /**
      * @param {Node} node
      */
-    focus(node, animate = true) {
+    focus(node) {
         this.currentFocus = node;
-        const [x, y, scale] = rectToView(fitRect(scaleRectangle(node.data.bounds, 1.1), [
+        const [x, y, scale] = rectToView(fitRect(scaleRectangle(this.clusterBounds(node, node.depth), 1.1), [
             this.props.width,
             this.props.height
         ]), this.props.width);
         const transition = this.svg.transition().duration(750);
-        if (animate) {
-            transition.tween("zoom", () => {
-                const f = ([x, y, scale]) => [x, y, 2000 / scale];
-                const i = d3.interpolateZoom(f(this.view), f([x, y, scale]));
-                return (t) => this.setZoom(f(i(t)));
-            });
-        }
-        else {
-            this.setZoom([x, y, scale]);
-        }
+        this.leaves
+            .filter(node => whichBranch(this.currentFocus, node) != -1)
+            .transition(transition)
+            .attr("transform", node => {
+            const [cx, cy] = nodeLocation(node, this.currentFocus.depth);
+            return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
+        });
+        // this.clusters
+        //   .filter(node => whichBranch(this.currentFocus, node) != -1)
+        //   .attr("transform", node => {
+        //     const [cx, cy] = nodeLocation(node, this.currentFocus.depth);
+        //     return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
+        //   })
+        //   .attr(
+        //     "r",
+        //     node =>
+        //       this.props.clusterScale *
+        //       this.clusterRadius(node, this.currentFocus.depth) *
+        //       scale
+        //   );
         this.leaves
             .transition(transition)
             .style("fill", this.leafColor)
-            .style("fill-opacity", node => whichBranch(this.currentFocus, node) == -1 ? 0.2 : 1);
+            .style("fill-opacity", node => whichBranch(this.currentFocus, node) == -1 ? 0 : 1);
         /**
          * Helper function for showing/hiding relevant clusters
          */
-        const onStart = (node, el) => {
-            if (el.style.visibility != "visible" &&
-                this.currentFocus.children.indexOf(node) != -1) {
-                el.style.visibility = "visible";
-            }
-        };
-        /**
-         * @param {Node} node
-         * @param {Element} el
-         */
-        const onEnd = (node, el) => {
-            el.style.visibility =
-                this.currentFocus.children.indexOf(node) == -1 ? "hidden" : "visible";
-        };
-        this.clusters
-            .transition(transition)
-            .style("fill-opacity", node => this.props.clusterOpacity *
-            (this.currentFocus.children.indexOf(node) != -1 ? 1 : 0))
-            .on("start", function (node) {
-            // @ts-ignore
-            onStart(node, this);
-        })
-            .on("end", function (node) {
-            // @ts-ignore
-            onEnd(node, this);
-        });
+        // const onStart = (
+        //   node: Node,
+        //   el: { style: { visibility: string } }
+        // ): void => {
+        //   if (
+        //     el.style.visibility != "visible" &&
+        //     this.currentFocus.children.indexOf(node) != -1
+        //   ) {
+        //     el.style.visibility = "visible";
+        //   }
+        // };
+        // const onEnd = (node: Node, el: { style: { visibility: string } }): void => {
+        //   el.style.visibility =
+        //     this.currentFocus.children.indexOf(node) == -1 ? "hidden" : "visible";
+        // };
+        // this.clusters
+        //   .transition(transition)
+        //   .style(
+        //     "fill-opacity",
+        //     node =>
+        //       this.props.clusterOpacity *
+        //       (this.currentFocus.children.indexOf(node) != -1 ? 1 : 0)
+        //   )
+        //   .on("start", function(node) {
+        //     // @ts-ignore
+        //     onStart(node, this);
+        //   })
+        //   .on("end", function(node) {
+        //     // @ts-ignore
+        //     onEnd(node, this);
+        //   });
     }
     componentDidMount() {
         this.initClusterFunctions();
         this.initRoot();
         this.initSVG();
-        this.initClusters();
+        // this.initClusters();
         this.initLeaves();
-        this.focus(this.root, false);
+        this.focus(this.root);
     }
     render() {
         return React.createElement("svg", { ref: this.svgRef });
@@ -6399,7 +6406,7 @@ Chart.propTypes = {
     clusterScale: PropTypes.number
 };
 Chart.defaultProps = {
-    clusterOpacity: 0.5,
+    clusterOpacity: 0.2,
     clusterScale: 1.5
 };
 
@@ -6460,9 +6467,8 @@ exports.ClusterData = t.recursion("ClusterData", () => t.partial({
     name: t.string,
     preview: t.string,
     size: t.number,
-    bounds: t.tuple([t.number, t.number, t.number, t.number]),
-    x: t.number,
-    y: t.number,
+    x: t.array(t.number),
+    y: t.array(t.number),
     children: t.array(exports.ClusterData)
 }));
 
