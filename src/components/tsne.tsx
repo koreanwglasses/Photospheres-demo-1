@@ -172,6 +172,7 @@ interface ChartProps {
 interface ChartState {
   showPreview: boolean;
   imageSrc: string;
+  imageSrc2: string;
   mouseX: number;
   mouseY: number;
 }
@@ -207,6 +208,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
   state = {
     showPreview: false,
     imageSrc: "",
+    imageSrc2: "",
     mouseX: 0,
     mouseY: 0
   };
@@ -299,7 +301,14 @@ export class Chart extends React.Component<ChartProps, ChartState> {
       .on("click", this.handleNodeClick)
       .attr("r", 15)
       .on("mouseover", node => {
-        this.setState({ showPreview: true, imageSrc: node.data.preview });
+        const branch = whichBranch(this.currentFocus, node);
+        const imageSrc2 =
+          branch != -1 && this.currentFocus.children[branch].data.preview;
+        this.setState({
+          showPreview: true,
+          imageSrc: node.data.preview,
+          imageSrc2
+        });
       })
       .on("mouseout", node => {
         this.setState(
@@ -474,6 +483,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
             x={this.state.mouseX}
             y={this.state.mouseY}
             imageSrc={this.state.imageSrc}
+            imageSrc2={this.state.imageSrc2}
           />
         )}
       </>

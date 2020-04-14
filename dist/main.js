@@ -6139,7 +6139,11 @@ class Preview extends React.Component {
             "Preview: ",
             React.createElement("span", { id: "preview-name" }),
             React.createElement("br", null),
-            React.createElement("img", { src: imageSrc, width: "160", height: "120" })));
+            React.createElement("img", { src: imageSrc, width: "160", height: "120" }),
+            this.props.imageSrc2 && (React.createElement(React.Fragment, null,
+                React.createElement("br", null),
+                " ",
+                React.createElement("img", { src: this.props.imageSrc2, width: "160", height: "120" })))));
     }
 }
 exports.Preview = Preview;
@@ -6285,6 +6289,7 @@ class Chart extends React.Component {
         this.state = {
             showPreview: false,
             imageSrc: "",
+            imageSrc2: "",
             mouseX: 0,
             mouseY: 0
         };
@@ -6349,7 +6354,13 @@ class Chart extends React.Component {
             .on("click", this.handleNodeClick)
             .attr("r", 15)
             .on("mouseover", node => {
-            this.setState({ showPreview: true, imageSrc: node.data.preview });
+            const branch = whichBranch(this.currentFocus, node);
+            const imageSrc2 = branch != -1 && this.currentFocus.children[branch].data.preview;
+            this.setState({
+                showPreview: true,
+                imageSrc: node.data.preview,
+                imageSrc2
+            });
         })
             .on("mouseout", node => {
             this.setState(prevState => prevState.imageSrc == node.data.preview && { showPreview: false });
@@ -6487,7 +6498,7 @@ class Chart extends React.Component {
                     top: 0,
                     width: this.props.width,
                     height: this.props.height
-                }, x: this.state.mouseX, y: this.state.mouseY, imageSrc: this.state.imageSrc }))));
+                }, x: this.state.mouseX, y: this.state.mouseY, imageSrc: this.state.imageSrc, imageSrc2: this.state.imageSrc2 }))));
     }
 }
 exports.Chart = Chart;

@@ -2,6 +2,7 @@ import * as React from "react";
 
 interface PreviewProps {
   imageSrc: string;
+  imageSrc2?: string;
   x: number;
   y: number;
   bounds: { left: number; top: number; width: number; height: number };
@@ -42,6 +43,11 @@ export class Preview extends React.Component<PreviewProps> {
         Preview: <span id="preview-name"></span>
         <br />
         <img src={imageSrc} width="160" height="120" />
+        {this.props.imageSrc2 && (
+          <>
+            <br /> <img src={this.props.imageSrc2} width="160" height="120" />
+          </>
+        )}
       </div>
     );
   }
