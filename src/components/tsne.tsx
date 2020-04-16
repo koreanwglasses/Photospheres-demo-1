@@ -171,19 +171,12 @@ interface ChartProps {
 
 interface ChartState {
   showPreview: boolean;
-  imageSrc: string;
-  imageSrc2: string;
+  hoverNode: Node;
   mouseX: number;
   mouseY: number;
 }
 
 type SVGSelection = d3.Selection<SVGSVGElement, ClusterData, null, undefined>;
-type ClustersSelection = d3.Selection<
-  d3.BaseType,
-  Node,
-  SVGGElement,
-  ClusterData
->;
 type LeavesSelection = d3.Selection<
   d3.BaseType,
   Node,
@@ -207,8 +200,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
 
   state = {
     showPreview: false,
-    imageSrc: "",
-    imageSrc2: "",
+    hoverNode: null as Node,
     mouseX: 0,
     mouseY: 0
   };
@@ -219,12 +211,10 @@ export class Chart extends React.Component<ChartProps, ChartState> {
 
   // Memoized versions of functions above. Dependent on the specific data
   private clusterBounds: typeof clusterBounds;
-  private clusterRadius: typeof clusterRadius;
   private colorIndex: typeof colorIndex;
 
   private root: Node = null;
   private svg: SVGSelection = null;
-  private clusters: ClustersSelection = null;
   private leaves: LeavesSelection = null;
 
   constructor(props: ChartProps) {
@@ -237,10 +227,6 @@ export class Chart extends React.Component<ChartProps, ChartState> {
   private initClusterFunctions(): void {
     this.clusterBounds = memoize(
       clusterBounds,
-      (node, depth) => node.value + "," + depth
-    );
-    this.clusterRadius = memoize(
-      clusterRadius,
       (node, depth) => node.value + "," + depth
     );
     this.colorIndex = memoize(colorIndex, node => node.value);
@@ -278,20 +264,6 @@ export class Chart extends React.Component<ChartProps, ChartState> {
       });
   }
 
-  private initClusters(): void {
-    this.clusters = this.svg
-      .append("g")
-      .selectAll("circle")
-      .data(this.root.descendants().filter(node => node.children))
-      .join("circle")
-      .attr("fill-opacity", 0)
-      .attr(
-        "fill",
-        node => colorCycle[this.colorIndex(node) % colorCycle.length]
-      )
-      .on("click", this.handleNodeClick);
-  }
-
   private initLeaves(): void {
     this.leaves = this.svg
       .append("g")
@@ -301,19 +273,21 @@ export class Chart extends React.Component<ChartProps, ChartState> {
       .on("click", this.handleNodeClick)
       .attr("r", 15)
       .on("mouseover", node => {
-        const branch = whichBranch(this.currentFocus, node);
-        const imageSrc2 =
-          branch != -1 && this.currentFocus.children[branch].data.preview;
         this.setState({
           showPreview: true,
-          imageSrc: node.data.preview,
-          imageSrc2
+          hoverNode: node
         });
       })
       .on("mouseout", node => {
-        this.setState(
-          prevState =>
-            prevState.imageSrc == node.data.preview && { showPreview: false }
+        setTimeout(
+          () =>
+            this.setState(
+              prevState =>
+                prevState.hoverNode == node && {
+                  showPreview: false
+                }
+            ),
+          1000
         );
       });
   }
@@ -325,10 +299,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
     d3.event.stopPropagation();
 
     const branchIndex = whichBranch(this.currentFocus, d);
-    // if (branchIndex == -1 && this.currentFocus.parent) {
-    //   this.focus(this.currentFocus.parent);
-    //   return;
-    // }
+
     if (branchIndex != -1 && this.currentFocus.children) {
       this.focus(this.currentFocus.children[branchIndex]);
     }
@@ -371,20 +342,6 @@ export class Chart extends React.Component<ChartProps, ChartState> {
         return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
       });
 
-    // this.clusters
-    //   .filter(node => whichBranch(this.currentFocus, node) != -1)
-    //   .attr("transform", node => {
-    //     const [cx, cy] = nodeLocation(node, this.currentFocus.depth);
-    //     return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
-    //   })
-    //   .attr(
-    //     "r",
-    //     node =>
-    //       this.props.clusterScale *
-    //       this.clusterRadius(node, this.currentFocus.depth) *
-    //       scale
-    //   );
-
     /**
      * Helper function for showing/hiding relevant clusters
      */
@@ -419,56 +376,29 @@ export class Chart extends React.Component<ChartProps, ChartState> {
         // @ts-ignore
         onEnd(node, this);
       });
-
-    /**
-     * Helper function for showing/hiding relevant clusters
-     */
-    // const onStart = (
-    //   node: Node,
-    //   el: { style: { visibility: string } }
-    // ): void => {
-    //   if (
-    //     el.style.visibility != "visible" &&
-    //     this.currentFocus.children.indexOf(node) != -1
-    //   ) {
-    //     el.style.visibility = "visible";
-    //   }
-    // };
-
-    // const onEnd = (node: Node, el: { style: { visibility: string } }): void => {
-    //   el.style.visibility =
-    //     this.currentFocus.children.indexOf(node) == -1 ? "hidden" : "visible";
-    // };
-
-    // this.clusters
-    //   .transition(transition)
-    //   .style(
-    //     "fill-opacity",
-    //     node =>
-    //       this.props.clusterOpacity *
-    //       (this.currentFocus.children.indexOf(node) != -1 ? 1 : 0)
-    //   )
-    //   .on("start", function(node) {
-    //     // @ts-ignore
-    //     onStart(node, this);
-    //   })
-    //   .on("end", function(node) {
-    //     // @ts-ignore
-    //     onEnd(node, this);
-    //   });
   }
 
   componentDidMount() {
     this.initClusterFunctions();
     this.initRoot();
     this.initSVG();
-    // this.initClusters();
     this.initLeaves();
 
     this.focus(this.root);
   }
 
   render() {
+    const { hoverNode } = this.state;
+    let imageSrc: string;
+    let imageSrc2: string;
+
+    if (hoverNode) {
+      imageSrc = hoverNode.data.preview;
+      const branch = whichBranch(this.currentFocus, hoverNode);
+      imageSrc2 =
+        branch != -1 && this.currentFocus.children[branch].data.preview;
+    }
+
     return (
       <>
         <svg ref={this.svgRef}></svg>
@@ -482,8 +412,9 @@ export class Chart extends React.Component<ChartProps, ChartState> {
             }}
             x={this.state.mouseX}
             y={this.state.mouseY}
-            imageSrc={this.state.imageSrc}
-            imageSrc2={this.state.imageSrc2}
+            imageSrc={imageSrc}
+            imageSrc2={imageSrc2}
+            backgroundColor={this.leafColor(hoverNode)}
           />
         )}
       </>

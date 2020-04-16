@@ -6124,17 +6124,18 @@ class Preview extends React.Component {
         const flipUp = y + height - bounds.top > bounds.height;
         const flipLeft = x + width - bounds.left > bounds.width;
         if (flipUp && flipLeft) {
-            classList.push("flipped-up-left");
+            classList.push("photospheres-flipped-up-left");
         }
         else if (flipUp) {
-            classList.push("flipped-up");
+            classList.push("photospheres-flipped-up");
         }
         else if (flipLeft) {
-            classList.push("flipped-left");
+            classList.push("photospheres-flipped-left");
         }
         return (React.createElement("div", { ref: this.containerRef, style: {
                 top: y - (flipUp && height),
-                left: x - (flipLeft && width)
+                left: x - (flipLeft && width),
+                backgroundColor: this.props.backgroundColor
             }, className: classList.join(" ") },
             "Preview: ",
             React.createElement("span", { id: "preview-name" }),
@@ -6288,8 +6289,7 @@ class Chart extends React.Component {
         super(props);
         this.state = {
             showPreview: false,
-            imageSrc: "",
-            imageSrc2: "",
+            hoverNode: null,
             mouseX: 0,
             mouseY: 0
         };
@@ -6297,14 +6297,12 @@ class Chart extends React.Component {
         this.currentFocus = null;
         this.root = null;
         this.svg = null;
-        this.clusters = null;
         this.leaves = null;
         this.handleNodeClick = this.handleNodeClick.bind(this);
         this.leafColor = this.leafColor.bind(this);
     }
     initClusterFunctions() {
         this.clusterBounds = utils_1.memoize(clusterBounds, (node, depth) => node.value + "," + depth);
-        this.clusterRadius = utils_1.memoize(clusterRadius, (node, depth) => node.value + "," + depth);
         this.colorIndex = utils_1.memoize(colorIndex, node => node.value);
     }
     initRoot() {
@@ -6335,16 +6333,6 @@ class Chart extends React.Component {
             this.setState(prevState => prevState.showPreview && { mouseX, mouseY });
         });
     }
-    initClusters() {
-        this.clusters = this.svg
-            .append("g")
-            .selectAll("circle")
-            .data(this.root.descendants().filter(node => node.children))
-            .join("circle")
-            .attr("fill-opacity", 0)
-            .attr("fill", node => colorCycle[this.colorIndex(node) % colorCycle.length])
-            .on("click", this.handleNodeClick);
-    }
     initLeaves() {
         this.leaves = this.svg
             .append("g")
@@ -6354,16 +6342,15 @@ class Chart extends React.Component {
             .on("click", this.handleNodeClick)
             .attr("r", 15)
             .on("mouseover", node => {
-            const branch = whichBranch(this.currentFocus, node);
-            const imageSrc2 = branch != -1 && this.currentFocus.children[branch].data.preview;
             this.setState({
                 showPreview: true,
-                imageSrc: node.data.preview,
-                imageSrc2
+                hoverNode: node
             });
         })
             .on("mouseout", node => {
-            this.setState(prevState => prevState.imageSrc == node.data.preview && { showPreview: false });
+            setTimeout(() => this.setState(prevState => prevState.hoverNode == node && {
+                showPreview: false
+            }), 1000);
         });
     }
     /**
@@ -6372,10 +6359,6 @@ class Chart extends React.Component {
     handleNodeClick(d) {
         d3.event.stopPropagation();
         const branchIndex = whichBranch(this.currentFocus, d);
-        // if (branchIndex == -1 && this.currentFocus.parent) {
-        //   this.focus(this.currentFocus.parent);
-        //   return;
-        // }
         if (branchIndex != -1 && this.currentFocus.children) {
             this.focus(this.currentFocus.children[branchIndex]);
         }
@@ -6409,19 +6392,6 @@ class Chart extends React.Component {
             const [cx, cy] = nodeLocation(node, this.currentFocus.depth);
             return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
         });
-        // this.clusters
-        //   .filter(node => whichBranch(this.currentFocus, node) != -1)
-        //   .attr("transform", node => {
-        //     const [cx, cy] = nodeLocation(node, this.currentFocus.depth);
-        //     return `translate(${(cx - x) * scale},${(cy - y) * scale})`;
-        //   })
-        //   .attr(
-        //     "r",
-        //     node =>
-        //       this.props.clusterScale *
-        //       this.clusterRadius(node, this.currentFocus.depth) *
-        //       scale
-        //   );
         /**
          * Helper function for showing/hiding relevant clusters
          */
@@ -6447,50 +6417,24 @@ class Chart extends React.Component {
             // @ts-ignore
             onEnd(node, this);
         });
-        /**
-         * Helper function for showing/hiding relevant clusters
-         */
-        // const onStart = (
-        //   node: Node,
-        //   el: { style: { visibility: string } }
-        // ): void => {
-        //   if (
-        //     el.style.visibility != "visible" &&
-        //     this.currentFocus.children.indexOf(node) != -1
-        //   ) {
-        //     el.style.visibility = "visible";
-        //   }
-        // };
-        // const onEnd = (node: Node, el: { style: { visibility: string } }): void => {
-        //   el.style.visibility =
-        //     this.currentFocus.children.indexOf(node) == -1 ? "hidden" : "visible";
-        // };
-        // this.clusters
-        //   .transition(transition)
-        //   .style(
-        //     "fill-opacity",
-        //     node =>
-        //       this.props.clusterOpacity *
-        //       (this.currentFocus.children.indexOf(node) != -1 ? 1 : 0)
-        //   )
-        //   .on("start", function(node) {
-        //     // @ts-ignore
-        //     onStart(node, this);
-        //   })
-        //   .on("end", function(node) {
-        //     // @ts-ignore
-        //     onEnd(node, this);
-        //   });
     }
     componentDidMount() {
         this.initClusterFunctions();
         this.initRoot();
         this.initSVG();
-        // this.initClusters();
         this.initLeaves();
         this.focus(this.root);
     }
     render() {
+        const { hoverNode } = this.state;
+        let imageSrc;
+        let imageSrc2;
+        if (hoverNode) {
+            imageSrc = hoverNode.data.preview;
+            const branch = whichBranch(this.currentFocus, hoverNode);
+            imageSrc2 =
+                branch != -1 && this.currentFocus.children[branch].data.preview;
+        }
         return (React.createElement(React.Fragment, null,
             React.createElement("svg", { ref: this.svgRef }),
             this.state.showPreview && this.svgRef.current && (React.createElement(preview_1.Preview, { bounds: {
@@ -6498,7 +6442,7 @@ class Chart extends React.Component {
                     top: 0,
                     width: this.props.width,
                     height: this.props.height
-                }, x: this.state.mouseX, y: this.state.mouseY, imageSrc: this.state.imageSrc, imageSrc2: this.state.imageSrc2 }))));
+                }, x: this.state.mouseX, y: this.state.mouseY, imageSrc: imageSrc, imageSrc2: imageSrc2, backgroundColor: this.leafColor(hoverNode) }))));
     }
 }
 exports.Chart = Chart;

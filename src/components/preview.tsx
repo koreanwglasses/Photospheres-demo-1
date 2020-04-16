@@ -6,6 +6,7 @@ interface PreviewProps {
   x: number;
   y: number;
   bounds: { left: number; top: number; width: number; height: number };
+  backgroundColor: string;
 }
 
 export class Preview extends React.Component<PreviewProps> {
@@ -24,11 +25,11 @@ export class Preview extends React.Component<PreviewProps> {
     const flipLeft = x + width - bounds.left > bounds.width;
 
     if (flipUp && flipLeft) {
-      classList.push("flipped-up-left");
+      classList.push("photospheres-flipped-up-left");
     } else if (flipUp) {
-      classList.push("flipped-up");
+      classList.push("photospheres-flipped-up");
     } else if (flipLeft) {
-      classList.push("flipped-left");
+      classList.push("photospheres-flipped-left");
     }
 
     return (
@@ -36,7 +37,8 @@ export class Preview extends React.Component<PreviewProps> {
         ref={this.containerRef}
         style={{
           top: y - (flipUp && height),
-          left: x - (flipLeft && width)
+          left: x - (flipLeft && width),
+          backgroundColor: this.props.backgroundColor
         }}
         className={classList.join(" ")}
       >
