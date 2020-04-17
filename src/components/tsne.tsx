@@ -60,6 +60,51 @@ function scaleRectangle(
   return [centerX - newWidth / 2, centerY - newHeight / 2, newWidth, newHeight];
 }
 
+function minDist(points: [number, number][]): number {
+  if (points.length <= 1) return Infinity;
+  if (points.length == 2)
+    return Math.sqrt(
+      (points[0][0] - points[1][0]) ** 2 + (points[0][1] - points[1][1]) ** 2
+    );
+
+  const xs = points.map(([x]) => x);
+  const mid = (Math.max(...xs) + Math.min(...xs)) / 2;
+  const left = points.filter(([x]) => x < mid);
+  const right = points.filter(([x]) => x >= mid);
+
+  const subMin = Math.min(minDist(left), minDist(right));
+
+  const leftStrip = left
+    .filter(([x]) => mid - x < subMin)
+    .sort(([, y1], [, y2]) => y1 - y2);
+
+  const rightStrip = right
+    .filter(([x]) => x - mid < subMin)
+    .sort(([, y1], [, y2]) => y1 - y2);
+
+  let min = subMin;
+  let rightIndexLow = 0;
+
+  for (const [lx, ly] of leftStrip) {
+    while (
+      rightIndexLow < rightStrip.length &&
+      rightStrip[rightIndexLow][1] < ly - subMin
+    )
+      rightIndexLow++;
+    for (
+      let i = rightIndexLow;
+      i < rightStrip.length && rightStrip[i][1] < ly + subMin;
+      i++
+    ) {
+      const [rx, ry] = rightStrip[i];
+      const dist = Math.sqrt((ry - ly) ** 2 + (rx - lx) ** 2);
+      min = Math.min(min, dist);
+    }
+  }
+
+  return min;
+}
+
 /**
  * @param {d3.HierarchyNode<any>} node
  * @returns {number}
@@ -85,40 +130,13 @@ function whichBranch<T>(
 }
 
 /**
- * @param {[number, number][]} points
- */
-function centroid(points: [number, number][]): [number, number] {
-  const [sumX, sumY] = points.reduce(
-    ([x, y], [accX, accY]) => [x + accX, y + accY],
-    [0, 0]
-  );
-  return [sumX / points.length, sumY / points.length];
-}
-
-/**
- * @param {[number, number][]} points
- */
-function stdDist(points: [number, number][]): number {
-  const [cX, cY] = centroid(points);
-  const dists2 = points.map(
-    ([x, y]) => Math.pow(cX - x, 2) + Math.pow(cY - y, 2)
-  );
-  const meanDist2 = dists2.reduce((a, b) => a + b, 0) / dists2.length;
-
-  const dists = dists2.map(Math.sqrt);
-  const meanDist = dists.reduce((a, b) => a + b, 0) / dists.length;
-
-  return Math.sqrt(meanDist2 - Math.pow(meanDist, 2));
-}
-
-/**
  * Colors this node with a non-negative integer such that colorIndex(node) !=
  * colorIndex(node.parent) and colorIndex(node) != colorIndex(sibling)
  * @param {d3.HierarchyNode<any>} node
  */
 function colorIndex<T>(node: d3.HierarchyNode<T>): number {
   let i = whichChild(node);
-  i += node.parent && colorIndex(node.parent) <= i ? 1 : 0;
+  // i += node.parent && colorIndex(node.parent) <= i ? 1 : 0;
   return i;
 }
 
@@ -134,6 +152,14 @@ function clusterBounds(node: Node, depth: number): Rectangle {
   return [left, top, width, height];
 }
 
+function clusterSpacing(node: Node): number {
+  return minDist(
+    node
+      .leaves()
+      .map(leaf => [leaf.data.x[node.depth], leaf.data.y[node.depth]])
+  );
+}
+
 function nodeLocation(node: Node, depth: number): [number, number] {
   if (node.depth == 0) return [0, 0];
 
@@ -142,13 +168,6 @@ function nodeLocation(node: Node, depth: number): [number, number] {
   const x = node.data.x[i];
   const y = node.data.y[i];
   return [x, y];
-}
-
-function clusterRadius(node: Node, depth: number): number {
-  const points = node
-    .leaves()
-    .map(leaf => [leaf.data.x[depth], leaf.data.y[depth]] as [number, number]);
-  return stdDist(points);
 }
 
 const colorCycle = [
@@ -211,6 +230,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
 
   // Memoized versions of functions above. Dependent on the specific data
   private clusterBounds: typeof clusterBounds;
+  private clusterSpacing: typeof clusterSpacing;
   private colorIndex: typeof colorIndex;
 
   private root: Node = null;
@@ -229,6 +249,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
       clusterBounds,
       (node, depth) => node.value + "," + depth
     );
+    this.clusterSpacing = memoize(clusterSpacing, node => node.value);
     this.colorIndex = memoize(colorIndex, node => node.value);
   }
 
@@ -271,7 +292,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
       .data(this.root.leaves())
       .join("circle")
       .on("click", this.handleNodeClick)
-      .attr("r", 15)
+      .attr("r", Math.min(this.props.width, this.props.height) / 50)
       .on("mouseover", node => {
         this.setState({
           showPreview: true,
@@ -324,7 +345,7 @@ export class Chart extends React.Component<ChartProps, ChartState> {
    */
   focus(node: Node): void {
     this.currentFocus = node;
-    const [x, y, scale] = rectToView(
+    const [x, y, maxScale] = rectToView(
       fitRect(scaleRectangle(this.clusterBounds(node, node.depth), 1.1), [
         this.props.width,
         this.props.height
@@ -333,6 +354,10 @@ export class Chart extends React.Component<ChartProps, ChartState> {
     );
 
     const transition = this.svg.transition().duration(750);
+
+    const scale = Math.min(maxScale, 50 / this.clusterSpacing(node));
+    // const scale = maxScale;
+    // console.log(this.clusterSpacing(node) * scale);
 
     this.leaves
       .filter(node => whichBranch(this.currentFocus, node) != -1)

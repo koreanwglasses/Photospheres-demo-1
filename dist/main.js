@@ -6203,6 +6203,36 @@ function scaleRectangle([x, y, width, height], scale) {
     const newHeight = height * scale;
     return [centerX - newWidth / 2, centerY - newHeight / 2, newWidth, newHeight];
 }
+function minDist(points) {
+    if (points.length <= 1)
+        return Infinity;
+    if (points.length == 2)
+        return Math.sqrt(Math.pow((points[0][0] - points[1][0]), 2) + Math.pow((points[0][1] - points[1][1]), 2));
+    const xs = points.map(([x]) => x);
+    const mid = (Math.max(...xs) + Math.min(...xs)) / 2;
+    const left = points.filter(([x]) => x < mid);
+    const right = points.filter(([x]) => x >= mid);
+    const subMin = Math.min(minDist(left), minDist(right));
+    const leftStrip = left
+        .filter(([x]) => mid - x < subMin)
+        .sort(([, y1], [, y2]) => y1 - y2);
+    const rightStrip = right
+        .filter(([x]) => x - mid < subMin)
+        .sort(([, y1], [, y2]) => y1 - y2);
+    let min = subMin;
+    let rightIndexLow = 0;
+    for (const [lx, ly] of leftStrip) {
+        while (rightIndexLow < rightStrip.length &&
+            rightStrip[rightIndexLow][1] < ly - subMin)
+            rightIndexLow++;
+        for (let i = rightIndexLow; i < rightStrip.length && rightStrip[i][1] < ly + subMin; i++) {
+            const [rx, ry] = rightStrip[i];
+            const dist = Math.sqrt(Math.pow((ry - ly), 2) + Math.pow((rx - lx), 2));
+            min = Math.min(min, dist);
+        }
+    }
+    return min;
+}
 /**
  * @param {d3.HierarchyNode<any>} node
  * @returns {number}
@@ -6225,31 +6255,13 @@ function whichBranch(branch, target) {
     return whichChild(lineage[branchIndex - 1]);
 }
 /**
- * @param {[number, number][]} points
- */
-function centroid(points) {
-    const [sumX, sumY] = points.reduce(([x, y], [accX, accY]) => [x + accX, y + accY], [0, 0]);
-    return [sumX / points.length, sumY / points.length];
-}
-/**
- * @param {[number, number][]} points
- */
-function stdDist(points) {
-    const [cX, cY] = centroid(points);
-    const dists2 = points.map(([x, y]) => Math.pow(cX - x, 2) + Math.pow(cY - y, 2));
-    const meanDist2 = dists2.reduce((a, b) => a + b, 0) / dists2.length;
-    const dists = dists2.map(Math.sqrt);
-    const meanDist = dists.reduce((a, b) => a + b, 0) / dists.length;
-    return Math.sqrt(meanDist2 - Math.pow(meanDist, 2));
-}
-/**
  * Colors this node with a non-negative integer such that colorIndex(node) !=
  * colorIndex(node.parent) and colorIndex(node) != colorIndex(sibling)
  * @param {d3.HierarchyNode<any>} node
  */
 function colorIndex(node) {
     let i = whichChild(node);
-    i += node.parent && colorIndex(node.parent) <= i ? 1 : 0;
+    // i += node.parent && colorIndex(node.parent) <= i ? 1 : 0;
     return i;
 }
 function clusterBounds(node, depth) {
@@ -6261,6 +6273,11 @@ function clusterBounds(node, depth) {
     const height = Math.max(...ys) - top;
     return [left, top, width, height];
 }
+function clusterSpacing(node) {
+    return minDist(node
+        .leaves()
+        .map(leaf => [leaf.data.x[node.depth], leaf.data.y[node.depth]]));
+}
 function nodeLocation(node, depth) {
     if (node.depth == 0)
         return [0, 0];
@@ -6268,12 +6285,6 @@ function nodeLocation(node, depth) {
     const x = node.data.x[i];
     const y = node.data.y[i];
     return [x, y];
-}
-function clusterRadius(node, depth) {
-    const points = node
-        .leaves()
-        .map(leaf => [leaf.data.x[depth], leaf.data.y[depth]]);
-    return stdDist(points);
 }
 const colorCycle = [
     "#66c2a5",
@@ -6303,6 +6314,7 @@ class Chart extends React.Component {
     }
     initClusterFunctions() {
         this.clusterBounds = utils_1.memoize(clusterBounds, (node, depth) => node.value + "," + depth);
+        this.clusterSpacing = utils_1.memoize(clusterSpacing, node => node.value);
         this.colorIndex = utils_1.memoize(colorIndex, node => node.value);
     }
     initRoot() {
@@ -6340,7 +6352,7 @@ class Chart extends React.Component {
             .data(this.root.leaves())
             .join("circle")
             .on("click", this.handleNodeClick)
-            .attr("r", 15)
+            .attr("r", Math.min(this.props.width, this.props.height) / 50)
             .on("mouseover", node => {
             this.setState({
                 showPreview: true,
@@ -6380,11 +6392,14 @@ class Chart extends React.Component {
      */
     focus(node) {
         this.currentFocus = node;
-        const [x, y, scale] = rectToView(fitRect(scaleRectangle(this.clusterBounds(node, node.depth), 1.1), [
+        const [x, y, maxScale] = rectToView(fitRect(scaleRectangle(this.clusterBounds(node, node.depth), 1.1), [
             this.props.width,
             this.props.height
         ]), this.props.width);
         const transition = this.svg.transition().duration(750);
+        const scale = Math.min(maxScale, 50 / this.clusterSpacing(node));
+        // const scale = maxScale;
+        // console.log(this.clusterSpacing(node) * scale);
         this.leaves
             .filter(node => whichBranch(this.currentFocus, node) != -1)
             .transition(transition)
