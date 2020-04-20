@@ -31,7 +31,8 @@
     "minimist": "^1.2.2",
     "prop-types": "^15.7.2",
     "react": "^16.12.0",
-    "react-dom": "^16.12.0"
+    "react-dom": "^16.12.0",
+    "yarn": "^1.22.4"
   },
   "name": "photospheres",
   "version": "0.0.0",

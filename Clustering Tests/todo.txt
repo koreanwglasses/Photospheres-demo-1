@@ -1,0 +1,24 @@
+TODO:
+
+Clustering Option 1: Machine Learning that identifies photo features and then clusters off of that (similar features go together)
+I think I have this working to a degree. 
+TODO: Visualize the output and decide if it's doing anything right
+TODO: Plug it into the existing generation class
+
+Clustering Option 2: Image hashing and then bitwise clustering (photos with similar "hash distance" go together)
+Build a pipeline where I can plug in different hash functions
+    Should use hierarchical k means on the hash, but then also use the raw image to compute the centroid
+    Seems like this works, going to test with the existing ts file
+    Note that the hash might be too tight (see if this is fixable)
+
+    Problems :
+    Hash isn't great on these images (dissimilar images are clustered)
+        Determine if this is because of Kmeans or if the hash is too tight
+        Try a new clustering algorithm that works on hamming distance
+    Problem: The newer hierarchical k means isn't creating centroids.
+
+
+
+
+TODO: Make generic hierarchical k means function + class
+

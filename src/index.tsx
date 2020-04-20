@@ -7,7 +7,7 @@ import { Chart } from "./components/tsne";
 const root = document.getElementById("react-root");
 
 (async (): Promise<void> => {
-  const response = await fetch("example-data/cluster-data.json");
+  const response = await fetch("output/keras.json");
   const data = await response.json();
   ReactDOM.render(
     // <Photospheres
