@@ -563,7 +563,12 @@ function getWitherable(M) {
  * @since 2.0.0
  */
 function getValidation(S) {
-    return __assign(__assign({}, either), { _E: undefined, ap: function (mab, ma) {
+    return {
+        URI: URI,
+        _E: undefined,
+        map: either.map,
+        of: either.of,
+        ap: function (mab, ma) {
             return isLeft(mab)
                 ? isLeft(ma)
                     ? left(S.concat(mab.left, ma.left))
@@ -571,13 +576,16 @@ function getValidation(S) {
                 : isLeft(ma)
                     ? ma
                     : right(mab.right(ma.right));
-        }, alt: function (fx, f) {
+        },
+        chain: either.chain,
+        alt: function (fx, f) {
             if (isRight(fx)) {
                 return fx;
             }
             var fy = f();
             return isLeft(fy) ? left(S.concat(fx.left, fy.left)) : fy;
-        } });
+        }
+    };
 }
 /**
  * @since 2.0.0
@@ -1483,7 +1491,12 @@ exports.getWitherable = getWitherable;
  * @since 2.0.0
  */
 function getValidation(S) {
-    return __assign(__assign({}, exports.either), { _E: undefined, ap: function (mab, ma) {
+    return {
+        URI: exports.URI,
+        _E: undefined,
+        map: exports.either.map,
+        of: exports.either.of,
+        ap: function (mab, ma) {
             return isLeft(mab)
                 ? isLeft(ma)
                     ? left(S.concat(mab.left, ma.left))
@@ -1491,13 +1504,16 @@ function getValidation(S) {
                 : isLeft(ma)
                     ? ma
                     : right(mab.right(ma.right));
-        }, alt: function (fx, f) {
+        },
+        chain: exports.either.chain,
+        alt: function (fx, f) {
             if (isRight(fx)) {
                 return fx;
             }
             var fy = f();
             return isLeft(fy) ? left(S.concat(fx.left, fy.left)) : fy;
-        } });
+        }
+    };
 }
 exports.getValidation = getValidation;
 /**
@@ -1968,7 +1984,7 @@ exports.pipeable = pipeable;
 /*!*****************************************!*\
   !*** ./node_modules/io-ts/es6/index.js ***!
   \*****************************************/
-/*! exports provided: Type, identity, getFunctionName, getContextEntry, appendContext, failures, failure, success, NullType, nullType, UndefinedType, VoidType, voidType, UnknownType, unknown, StringType, string, NumberType, number, BigIntType, bigint, BooleanType, boolean, AnyArrayType, UnknownArray, AnyDictionaryType, UnknownRecord, FunctionType, Function, RefinementType, brand, Int, LiteralType, literal, KeyofType, keyof, RecursiveType, recursion, ArrayType, array, InterfaceType, type, PartialType, partial, DictionaryType, getDomainKeys, record, UnionType, union, IntersectionType, intersection, TupleType, tuple, ReadonlyType, readonly, ReadonlyArrayType, readonlyArray, strict, TaggedUnionType, taggedUnion, ExactType, exact, null, undefined, Array, interface, void, getValidationError, getDefaultContext, NeverType, never, AnyType, any, Dictionary, ObjectType, object, refinement, Integer, dictionary, StrictType, clean, alias, emptyTags, getTags, getIndex */
+/*! exports provided: Type, identity, getFunctionName, getContextEntry, appendContext, failures, failure, success, NullType, nullType, UndefinedType, VoidType, voidType, UnknownType, unknown, StringType, string, NumberType, number, BigIntType, bigint, BooleanType, boolean, AnyArrayType, UnknownArray, AnyDictionaryType, UnknownRecord, FunctionType, Function, RefinementType, brand, Int, LiteralType, literal, KeyofType, keyof, RecursiveType, recursion, ArrayType, array, InterfaceType, type, PartialType, partial, DictionaryType, record, UnionType, union, IntersectionType, intersection, TupleType, tuple, ReadonlyType, readonly, ReadonlyArrayType, readonlyArray, strict, TaggedUnionType, taggedUnion, ExactType, exact, null, undefined, Array, interface, void, getValidationError, getDefaultContext, NeverType, never, AnyType, any, Dictionary, ObjectType, object, refinement, Integer, dictionary, StrictType, clean, alias, emptyTags, getTags, getIndex */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -2018,7 +2034,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "PartialType", function() { return PartialType; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "partial", function() { return partial; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DictionaryType", function() { return DictionaryType; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getDomainKeys", function() { return getDomainKeys; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "record", function() { return record; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "UnionType", function() { return UnionType; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "union", function() { return union; });
@@ -2082,13 +2097,6 @@ var __assign = (undefined && undefined.__assign) || function () {
         return t;
     };
     return __assign.apply(this, arguments);
-};
-var __spreadArrays = (undefined && undefined.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
 };
 /**
  * @since 1.0.0
@@ -2191,6 +2199,11 @@ var pushAll = function (xs, ys) {
         xs.push(ys[i]);
     }
 };
+var getIsCodec = function (tag) { return function (codec) { return codec._tag === tag; }; };
+// tslint:disable-next-line: deprecation
+var isAnyCodec = getIsCodec('AnyType');
+var isInterfaceCodec = getIsCodec('InterfaceType');
+var isPartialCodec = getIsCodec('PartialType');
 //
 // basic types
 //
@@ -2584,7 +2597,7 @@ var type = function (props, name) {
         if (UnknownRecord.is(u)) {
             for (var i = 0; i < len; i++) {
                 var k = keys[i];
-                if (!types[i].is(u[k])) {
+                if (!hasOwnProperty.call(u, k) || !types[i].is(u[k])) {
                     return false;
                 }
             }
@@ -2597,6 +2610,12 @@ var type = function (props, name) {
             var errors = [];
             for (var i = 0; i < len; i++) {
                 var k = keys[i];
+                if (!hasOwnProperty.call(a, k)) {
+                    if (a === o) {
+                        a = __assign({}, o);
+                    }
+                    a[k] = a[k];
+                }
                 var ak = a[k];
                 var type_1 = types[i];
                 var result = type_1.validate(ak, appendContext(c, k, type_1, ak));
@@ -2605,7 +2624,7 @@ var type = function (props, name) {
                 }
                 else {
                     var vak = result.right;
-                    if (vak !== ak || (vak === undefined && !hasOwnProperty.call(a, k))) {
+                    if (vak !== ak) {
                         /* istanbul ignore next */
                         if (a === o) {
                             a = __assign({}, o);
@@ -2723,67 +2742,16 @@ var DictionaryType = /** @class */ (function (_super) {
     return DictionaryType;
 }(Type));
 
-function enumerableRecord(keys, domain, codomain, name) {
-    if (name === void 0) { name = "{ [K in " + domain.name + "]: " + codomain.name + " }"; }
-    var len = keys.length;
-    return new DictionaryType(name, function (u) { return UnknownRecord.is(u) && keys.every(function (k) { return codomain.is(u[k]); }); }, function (u, c) {
-        return chain(UnknownRecord.validate(u, c), function (o) {
-            var a = {};
-            var errors = [];
-            var changed = false;
-            for (var i = 0; i < len; i++) {
-                var k = keys[i];
-                var ok = o[k];
-                var codomainResult = codomain.validate(ok, appendContext(c, k, codomain, ok));
-                if (Object(fp_ts_es6_Either__WEBPACK_IMPORTED_MODULE_0__["isLeft"])(codomainResult)) {
-                    pushAll(errors, codomainResult.left);
-                }
-                else {
-                    var vok = codomainResult.right;
-                    changed = changed || vok !== ok;
-                    a[k] = vok;
-                }
-            }
-            return errors.length > 0 ? failures(errors) : success((changed || Object.keys(o).length !== len ? a : o));
-        });
-    }, codomain.encode === identity
-        ? identity
-        : function (a) {
-            var s = {};
-            for (var i = 0; i < len; i++) {
-                var k = keys[i];
-                s[k] = codomain.encode(a[k]);
-            }
-            return s;
-        }, domain, codomain);
-}
 /**
- * @internal
+ * @since 1.7.1
  */
-function getDomainKeys(domain) {
-    var _a;
-    if (isLiteralC(domain)) {
-        var literal_1 = domain.value;
-        if (string.is(literal_1)) {
-            return _a = {}, _a[literal_1] = null, _a;
-        }
-    }
-    else if (isKeyofC(domain)) {
-        return domain.keys;
-    }
-    else if (isUnionC(domain)) {
-        var keys = domain.types.map(function (type) { return getDomainKeys(type); });
-        return keys.some(undefinedType.is) ? undefined : Object.assign.apply(Object, __spreadArrays([{}], keys));
-    }
-    return undefined;
-}
-function nonEnumerableRecord(domain, codomain, name) {
+var record = function (domain, codomain, name) {
     if (name === void 0) { name = "{ [K in " + domain.name + "]: " + codomain.name + " }"; }
     return new DictionaryType(name, function (u) {
         if (UnknownRecord.is(u)) {
             return Object.keys(u).every(function (k) { return domain.is(k) && codomain.is(u[k]); });
         }
-        return isAnyC(codomain) && Array.isArray(u);
+        return isAnyCodec(codomain) && Array.isArray(u);
     }, function (u, c) {
         if (UnknownRecord.is(u)) {
             var a = {};
@@ -2815,7 +2783,7 @@ function nonEnumerableRecord(domain, codomain, name) {
             }
             return errors.length > 0 ? failures(errors) : success((changed ? a : u));
         }
-        if (isAnyC(codomain) && Array.isArray(u)) {
+        if (isAnyCodec(codomain) && Array.isArray(u)) {
             return success(u);
         }
         return failure(u, c);
@@ -2831,16 +2799,7 @@ function nonEnumerableRecord(domain, codomain, name) {
             }
             return s;
         }, domain, codomain);
-}
-/**
- * @since 1.7.1
- */
-function record(domain, codomain, name) {
-    var keys = getDomainKeys(domain);
-    return keys
-        ? enumerableRecord(Object.keys(keys), domain, codomain, name)
-        : nonEnumerableRecord(domain, codomain, name);
-}
+};
 /**
  * @since 1.0.0
  */
@@ -3192,10 +3151,10 @@ var stripKeys = function (o, props) {
     return shouldStrip ? r : o;
 };
 var getExactTypeName = function (codec) {
-    if (isTypeC(codec)) {
+    if (isInterfaceCodec(codec)) {
         return "{| " + getNameFromProps(codec.props) + " |}";
     }
-    else if (isPartialC(codec)) {
+    else if (isPartialCodec(codec)) {
         return getPartialTypeName("{| " + getNameFromProps(codec.props) + " |}");
     }
     return "Exact<" + codec.name + ">";
@@ -3413,21 +3372,11 @@ function intersectTags(a, b) {
     }
     return r;
 }
-// tslint:disable-next-line: deprecation
-function isAnyC(codec) {
-    return codec._tag === 'AnyType';
-}
 function isLiteralC(codec) {
     return codec._tag === 'LiteralType';
 }
-function isKeyofC(codec) {
-    return codec._tag === 'KeyofType';
-}
 function isTypeC(codec) {
     return codec._tag === 'InterfaceType';
-}
-function isPartialC(codec) {
-    return codec._tag === 'PartialType';
 }
 // tslint:disable-next-line: deprecation
 function isStrictC(codec) {
@@ -3625,13 +3574,6 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * @since 1.0.0
@@ -3734,6 +3676,11 @@ var pushAll = function (xs, ys) {
         xs.push(ys[i]);
     }
 };
+var getIsCodec = function (tag) { return function (codec) { return codec._tag === tag; }; };
+// tslint:disable-next-line: deprecation
+var isAnyCodec = getIsCodec('AnyType');
+var isInterfaceCodec = getIsCodec('InterfaceType');
+var isPartialCodec = getIsCodec('PartialType');
 //
 // basic types
 //
@@ -4131,7 +4078,7 @@ exports.type = function (props, name) {
         if (exports.UnknownRecord.is(u)) {
             for (var i = 0; i < len; i++) {
                 var k = keys[i];
-                if (!types[i].is(u[k])) {
+                if (!hasOwnProperty.call(u, k) || !types[i].is(u[k])) {
                     return false;
                 }
             }
@@ -4144,6 +4091,12 @@ exports.type = function (props, name) {
             var errors = [];
             for (var i = 0; i < len; i++) {
                 var k = keys[i];
+                if (!hasOwnProperty.call(a, k)) {
+                    if (a === o) {
+                        a = __assign({}, o);
+                    }
+                    a[k] = a[k];
+                }
                 var ak = a[k];
                 var type_1 = types[i];
                 var result = type_1.validate(ak, exports.appendContext(c, k, type_1, ak));
@@ -4152,7 +4105,7 @@ exports.type = function (props, name) {
                 }
                 else {
                     var vak = result.right;
-                    if (vak !== ak || (vak === undefined && !hasOwnProperty.call(a, k))) {
+                    if (vak !== ak) {
                         /* istanbul ignore next */
                         if (a === o) {
                             a = __assign({}, o);
@@ -4271,68 +4224,16 @@ var DictionaryType = /** @class */ (function (_super) {
     return DictionaryType;
 }(Type));
 exports.DictionaryType = DictionaryType;
-function enumerableRecord(keys, domain, codomain, name) {
-    if (name === void 0) { name = "{ [K in " + domain.name + "]: " + codomain.name + " }"; }
-    var len = keys.length;
-    return new DictionaryType(name, function (u) { return exports.UnknownRecord.is(u) && keys.every(function (k) { return codomain.is(u[k]); }); }, function (u, c) {
-        return chain(exports.UnknownRecord.validate(u, c), function (o) {
-            var a = {};
-            var errors = [];
-            var changed = false;
-            for (var i = 0; i < len; i++) {
-                var k = keys[i];
-                var ok = o[k];
-                var codomainResult = codomain.validate(ok, exports.appendContext(c, k, codomain, ok));
-                if (Either_1.isLeft(codomainResult)) {
-                    pushAll(errors, codomainResult.left);
-                }
-                else {
-                    var vok = codomainResult.right;
-                    changed = changed || vok !== ok;
-                    a[k] = vok;
-                }
-            }
-            return errors.length > 0 ? exports.failures(errors) : exports.success((changed || Object.keys(o).length !== len ? a : o));
-        });
-    }, codomain.encode === exports.identity
-        ? exports.identity
-        : function (a) {
-            var s = {};
-            for (var i = 0; i < len; i++) {
-                var k = keys[i];
-                s[k] = codomain.encode(a[k]);
-            }
-            return s;
-        }, domain, codomain);
-}
 /**
- * @internal
+ * @since 1.7.1
  */
-function getDomainKeys(domain) {
-    var _a;
-    if (isLiteralC(domain)) {
-        var literal_1 = domain.value;
-        if (exports.string.is(literal_1)) {
-            return _a = {}, _a[literal_1] = null, _a;
-        }
-    }
-    else if (isKeyofC(domain)) {
-        return domain.keys;
-    }
-    else if (isUnionC(domain)) {
-        var keys = domain.types.map(function (type) { return getDomainKeys(type); });
-        return keys.some(undefinedType.is) ? undefined : Object.assign.apply(Object, __spreadArrays([{}], keys));
-    }
-    return undefined;
-}
-exports.getDomainKeys = getDomainKeys;
-function nonEnumerableRecord(domain, codomain, name) {
+exports.record = function (domain, codomain, name) {
     if (name === void 0) { name = "{ [K in " + domain.name + "]: " + codomain.name + " }"; }
     return new DictionaryType(name, function (u) {
         if (exports.UnknownRecord.is(u)) {
             return Object.keys(u).every(function (k) { return domain.is(k) && codomain.is(u[k]); });
         }
-        return isAnyC(codomain) && Array.isArray(u);
+        return isAnyCodec(codomain) && Array.isArray(u);
     }, function (u, c) {
         if (exports.UnknownRecord.is(u)) {
             var a = {};
@@ -4364,7 +4265,7 @@ function nonEnumerableRecord(domain, codomain, name) {
             }
             return errors.length > 0 ? exports.failures(errors) : exports.success((changed ? a : u));
         }
-        if (isAnyC(codomain) && Array.isArray(u)) {
+        if (isAnyCodec(codomain) && Array.isArray(u)) {
             return exports.success(u);
         }
         return exports.failure(u, c);
@@ -4380,17 +4281,7 @@ function nonEnumerableRecord(domain, codomain, name) {
             }
             return s;
         }, domain, codomain);
-}
-/**
- * @since 1.7.1
- */
-function record(domain, codomain, name) {
-    var keys = getDomainKeys(domain);
-    return keys
-        ? enumerableRecord(Object.keys(keys), domain, codomain, name)
-        : nonEnumerableRecord(domain, codomain, name);
-}
-exports.record = record;
+};
 /**
  * @since 1.0.0
  */
@@ -4744,10 +4635,10 @@ var stripKeys = function (o, props) {
     return shouldStrip ? r : o;
 };
 var getExactTypeName = function (codec) {
-    if (isTypeC(codec)) {
+    if (isInterfaceCodec(codec)) {
         return "{| " + getNameFromProps(codec.props) + " |}";
     }
-    else if (isPartialC(codec)) {
+    else if (isPartialCodec(codec)) {
         return getPartialTypeName("{| " + getNameFromProps(codec.props) + " |}");
     }
     return "Exact<" + codec.name + ">";
@@ -4870,7 +4761,7 @@ exports.Integer = refinement(exports.number, Number.isInteger, 'Integer');
  * @since 1.0.0
  * @deprecated
  */
-exports.dictionary = record;
+exports.dictionary = exports.record;
 /**
  * @since 1.0.0
  * @deprecated
@@ -4963,21 +4854,11 @@ function intersectTags(a, b) {
     }
     return r;
 }
-// tslint:disable-next-line: deprecation
-function isAnyC(codec) {
-    return codec._tag === 'AnyType';
-}
 function isLiteralC(codec) {
     return codec._tag === 'LiteralType';
 }
-function isKeyofC(codec) {
-    return codec._tag === 'KeyofType';
-}
 function isTypeC(codec) {
     return codec._tag === 'InterfaceType';
-}
-function isPartialC(codec) {
-    return codec._tag === 'PartialType';
 }
 // tslint:disable-next-line: deprecation
 function isStrictC(codec) {
@@ -5962,7 +5843,7 @@ module.exports = ReactPropTypesSecret;
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
-/** @license React v16.13.1
+/** @license React v16.12.0
  * react-is.development.js
  *
  * Copyright (c) Facebook, Inc. and its affiliates.
@@ -5978,6 +5859,8 @@ module.exports = ReactPropTypesSecret;
 if (true) {
   (function() {
 'use strict';
+
+Object.defineProperty(exports, '__esModule', { value: true });
 
 // The Symbol used to tag the ReactElement-like types. If there is no native Symbol
 // nor polyfill, then a plain number is used for performance.
@@ -5998,15 +5881,69 @@ var REACT_SUSPENSE_TYPE = hasSymbol ? Symbol.for('react.suspense') : 0xead1;
 var REACT_SUSPENSE_LIST_TYPE = hasSymbol ? Symbol.for('react.suspense_list') : 0xead8;
 var REACT_MEMO_TYPE = hasSymbol ? Symbol.for('react.memo') : 0xead3;
 var REACT_LAZY_TYPE = hasSymbol ? Symbol.for('react.lazy') : 0xead4;
-var REACT_BLOCK_TYPE = hasSymbol ? Symbol.for('react.block') : 0xead9;
 var REACT_FUNDAMENTAL_TYPE = hasSymbol ? Symbol.for('react.fundamental') : 0xead5;
 var REACT_RESPONDER_TYPE = hasSymbol ? Symbol.for('react.responder') : 0xead6;
 var REACT_SCOPE_TYPE = hasSymbol ? Symbol.for('react.scope') : 0xead7;
 
 function isValidElementType(type) {
   return typeof type === 'string' || typeof type === 'function' || // Note: its typeof might be other than 'symbol' or 'number' if it's a polyfill.
-  type === REACT_FRAGMENT_TYPE || type === REACT_CONCURRENT_MODE_TYPE || type === REACT_PROFILER_TYPE || type === REACT_STRICT_MODE_TYPE || type === REACT_SUSPENSE_TYPE || type === REACT_SUSPENSE_LIST_TYPE || typeof type === 'object' && type !== null && (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || type.$$typeof === REACT_FUNDAMENTAL_TYPE || type.$$typeof === REACT_RESPONDER_TYPE || type.$$typeof === REACT_SCOPE_TYPE || type.$$typeof === REACT_BLOCK_TYPE);
+  type === REACT_FRAGMENT_TYPE || type === REACT_CONCURRENT_MODE_TYPE || type === REACT_PROFILER_TYPE || type === REACT_STRICT_MODE_TYPE || type === REACT_SUSPENSE_TYPE || type === REACT_SUSPENSE_LIST_TYPE || typeof type === 'object' && type !== null && (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || type.$$typeof === REACT_FUNDAMENTAL_TYPE || type.$$typeof === REACT_RESPONDER_TYPE || type.$$typeof === REACT_SCOPE_TYPE);
 }
+
+/**
+ * Forked from fbjs/warning:
+ * https://github.com/facebook/fbjs/blob/e66ba20ad5be433eb54423f2b097d829324d9de6/packages/fbjs/src/__forks__/warning.js
+ *
+ * Only change is we use console.warn instead of console.error,
+ * and do nothing when 'console' is not supported.
+ * This really simplifies the code.
+ * ---
+ * Similar to invariant but only logs a warning if the condition is not met.
+ * This can be used to log issues in development environments in critical
+ * paths. Removing the logging code for production environments will keep the
+ * same logic and follow the same code paths.
+ */
+var lowPriorityWarningWithoutStack = function () {};
+
+{
+  var printWarning = function (format) {
+    for (var _len = arguments.length, args = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+      args[_key - 1] = arguments[_key];
+    }
+
+    var argIndex = 0;
+    var message = 'Warning: ' + format.replace(/%s/g, function () {
+      return args[argIndex++];
+    });
+
+    if (typeof console !== 'undefined') {
+      console.warn(message);
+    }
+
+    try {
+      // --- Welcome to debugging React ---
+      // This error was thrown as a convenience so that you can use this stack
+      // to find the callsite that caused this warning to fire.
+      throw new Error(message);
+    } catch (x) {}
+  };
+
+  lowPriorityWarningWithoutStack = function (condition, format) {
+    if (format === undefined) {
+      throw new Error('`lowPriorityWarningWithoutStack(condition, format, ...args)` requires a warning ' + 'message argument');
+    }
+
+    if (!condition) {
+      for (var _len2 = arguments.length, args = new Array(_len2 > 2 ? _len2 - 2 : 0), _key2 = 2; _key2 < _len2; _key2++) {
+        args[_key2 - 2] = arguments[_key2];
+      }
+
+      printWarning.apply(void 0, [format].concat(args));
+    }
+  };
+}
+
+var lowPriorityWarningWithoutStack$1 = lowPriorityWarningWithoutStack;
 
 function typeOf(object) {
   if (typeof object === 'object' && object !== null) {
@@ -6068,9 +6005,8 @@ var hasWarnedAboutDeprecatedIsAsyncMode = false; // AsyncMode should be deprecat
 function isAsyncMode(object) {
   {
     if (!hasWarnedAboutDeprecatedIsAsyncMode) {
-      hasWarnedAboutDeprecatedIsAsyncMode = true; // Using console['warn'] to evade Babel and ESLint
-
-      console['warn']('The ReactIs.isAsyncMode() alias has been deprecated, ' + 'and will be removed in React 17+. Update your code to use ' + 'ReactIs.isConcurrentMode() instead. It has the exact same API.');
+      hasWarnedAboutDeprecatedIsAsyncMode = true;
+      lowPriorityWarningWithoutStack$1(false, 'The ReactIs.isAsyncMode() alias has been deprecated, ' + 'and will be removed in React 17+. Update your code to use ' + 'ReactIs.isConcurrentMode() instead. It has the exact same API.');
     }
   }
 
@@ -6113,6 +6049,7 @@ function isSuspense(object) {
   return typeOf(object) === REACT_SUSPENSE_TYPE;
 }
 
+exports.typeOf = typeOf;
 exports.AsyncMode = AsyncMode;
 exports.ConcurrentMode = ConcurrentMode;
 exports.ContextConsumer = ContextConsumer;
@@ -6126,6 +6063,7 @@ exports.Portal = Portal;
 exports.Profiler = Profiler;
 exports.StrictMode = StrictMode;
 exports.Suspense = Suspense;
+exports.isValidElementType = isValidElementType;
 exports.isAsyncMode = isAsyncMode;
 exports.isConcurrentMode = isConcurrentMode;
 exports.isContextConsumer = isContextConsumer;
@@ -6139,8 +6077,6 @@ exports.isPortal = isPortal;
 exports.isProfiler = isProfiler;
 exports.isStrictMode = isStrictMode;
 exports.isSuspense = isSuspense;
-exports.isValidElementType = isValidElementType;
-exports.typeOf = typeOf;
   })();
 }
 
@@ -6564,7 +6500,7 @@ const ReactDOM = __webpack_require__(/*! react-dom */ "react-dom");
 const tsne_1 = __webpack_require__(/*! ./components/tsne */ "./src/components/tsne.tsx");
 const root = document.getElementById("react-root");
 (() => __awaiter(void 0, void 0, void 0, function* () {
-    const response = yield fetch("output/keras.json");
+    const response = yield fetch("example-data/keras-data.json");
     const data = yield response.json();
     ReactDOM.render(
     // <Photospheres
