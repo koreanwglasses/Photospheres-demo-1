@@ -36,8 +36,8 @@ export class Preview extends React.Component<PreviewProps> {
       <div
         ref={this.containerRef}
         style={{
-          top: y - (flipUp && height),
-          left: x - (flipLeft && width),
+          top: y - (flipUp ? 1 : 0) * (height + 10) + 5,
+          left: x - (flipLeft ? 1 : 0) * (width + 10) + 5,
           backgroundColor: this.props.backgroundColor
         }}
         className={classList.join(" ")}

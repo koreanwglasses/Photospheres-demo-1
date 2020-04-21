@@ -6133,8 +6133,8 @@ class Preview extends React.Component {
             classList.push("photospheres-flipped-left");
         }
         return (React.createElement("div", { ref: this.containerRef, style: {
-                top: y - (flipUp && height),
-                left: x - (flipLeft && width),
+                top: y - (flipUp ? 1 : 0) * (height + 10) + 5,
+                left: x - (flipLeft ? 1 : 0) * (width + 10) + 5,
                 backgroundColor: this.props.backgroundColor
             }, className: classList.join(" ") },
             "Preview: ",
@@ -6337,11 +6337,10 @@ class Chart extends React.Component {
             .style("font", "10px sans-serif")
             .attr("text-anchor", "middle")
             .style("cursor", "pointer")
-            .on("click", () => this.focus(this.currentFocus.parent || this.root))
-            .on("mousemove", () => {
-            const [x, y] = d3.mouse(this.svg.node());
-            const mouseX = x + this.props.width / 2;
-            const mouseY = y + this.props.height / 2;
+            .on("click", () => this.focus(this.currentFocus.parent || this.root));
+        this.svgRef.current.addEventListener("mousemove", e => {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
             this.setState(prevState => prevState.showPreview && { mouseX, mouseY });
         });
     }

@@ -276,13 +276,13 @@ export class Chart extends React.Component<ChartProps, ChartState> {
       .style("font", "10px sans-serif")
       .attr("text-anchor", "middle")
       .style("cursor", "pointer")
-      .on("click", () => this.focus(this.currentFocus.parent || this.root))
-      .on("mousemove", () => {
-        const [x, y] = d3.mouse(this.svg.node());
-        const mouseX = x + this.props.width / 2;
-        const mouseY = y + this.props.height / 2;
-        this.setState(prevState => prevState.showPreview && { mouseX, mouseY });
-      });
+      .on("click", () => this.focus(this.currentFocus.parent || this.root));
+
+    this.svgRef.current.addEventListener("mousemove", e => {
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+      this.setState(prevState => prevState.showPreview && { mouseX, mouseY });
+    });
   }
 
   private initLeaves(): void {
